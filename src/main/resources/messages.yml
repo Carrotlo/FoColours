@@ -1,0 +1,72 @@
+# FoColours messages
+# Tokens available in messages and GUI text:
+# {prefix} {theme} {muted} {white} {good} {bad}
+# Runtime placeholders used in selected places:
+# {player} {colour} {value} {step} {error} {available} {current_colour} {default_colour}
+
+tokens:
+  prefix: "{theme}{plugin} &8» {muted}"
+  theme: "#03fc88"
+  muted: "#a7b8b0"
+  white: "#ffffff"
+  good: "#3ecf8e"
+  bad: "#ff5d73"
+
+messages:
+  no-permission: "{prefix} {bad}You do not have permission {muted}to do that."
+  player-only: "{prefix} {bad}Only players {muted}can use this."
+  reload-complete: "{prefix} {good}Reloaded {theme}FoColours {muted}from config.yml, messages.yml, and guis/."
+  reload-failed: "{prefix} {bad}Reload failed at {theme}{step}{bad}. {muted}{error}"
+  ezcolors-disabled: "{prefix} {bad}EzColors compatibility is disabled {muted}in config.yml."
+  ezcolors-toggle-usage: "{prefix} {muted}Usage: {theme}/focoloursadmin convertezcolors <enable|disable|status>{muted}."
+  ezcolors-toggle-enabled: "{prefix} {good}Enabled {theme}EzColors compatibility {muted}and synced {theme}{count} {muted}online players."
+  ezcolors-toggle-disabled: "{prefix} {bad}Disabled {theme}EzColors compatibility{muted}."
+  ezcolors-toggle-status: "{prefix} {muted}EzColors compatibility: {state}"
+  select-success: "{prefix} {good}Selected {theme}{colour}{muted} for your chat."
+  reset-success: "{prefix} {good}Reset your chat colour {muted}to {theme}{default_colour}{muted}."
+  already-selected: "{prefix} {bad}You are already using {theme}{colour}{muted}."
+  already-default: "{prefix} {bad}You are already using the default colour."
+  not-unlocked: "{prefix} {bad}You do not have {theme}{colour}{muted} unlocked."
+  already-unlocked: "{prefix} {bad}{player} already has {theme}{colour}{muted} unlocked."
+  unknown-colour: "{prefix} {bad}Unknown colour {theme}{colour}{muted}."
+  unknown-player: "{prefix} {bad}Could not find player {theme}{player}{muted}."
+  admin-give-success: "{prefix} {good}Gave {theme}{colour}{muted} to {theme}{player}{muted}."
+  admin-take-success: "{prefix} {good}Took {theme}{colour}{muted} from {theme}{player}{muted}."
+  cannot-take-default: "{prefix} {bad}You cannot take the default colour from players."
+  custom-colour-added: "{prefix} {good}Added custom colour {theme}{colour} {muted}({value}{muted})."
+  custom-colour-removed: "{prefix} {good}Removed custom colour {theme}{colour}{muted}."
+  custom-colour-item-updated: "{prefix} {good}Updated {theme}{colour}{muted} to use item {theme}{item}{muted}."
+  custom-colour-renamed: "{prefix} {good}Renamed the custom colour to {theme}{colour}{muted}."
+  cannot-remove-default-custom: "{prefix} {bad}Change the default colour before removing that custom colour."
+  cannot-disable-default: "{prefix} {bad}You cannot disable the current default colour."
+  colour-must-be-enabled-first: "{prefix} {bad}Enable that colour before setting it as default."
+  default-colour-set: "{prefix} {good}Set the default colour to {theme}{colour}{muted}."
+  editor-saved: "{prefix} {good}Saved your editor change."
+  native-dialog-fallback: "{prefix} {bad}Native dialogs are not supported here. {muted}Using chat input."
+  admin-usage-give: "{prefix} {muted}Usage: {theme}/focoloursadmin give <player> <colour>"
+  admin-usage-take: "{prefix} {muted}Usage: {theme}/focoloursadmin take <player> <colour>"
+  admin-command-missing: "{prefix} {bad}Admin command is missing from plugin.yml: {theme}{command}"
+  admin-command-failed: "{prefix} {bad}Command failed. {muted}{error}"
+  prompt-invalid: "{prefix} {bad}That input was not valid. {muted}Try again or type {theme}cancel{muted}."
+  prompt-cancelled: "{prefix} {bad}Editor prompt cancelled."
+  player-help:
+    - "{prefix} {muted}Use {theme}/focolours {muted}to open the colour menu."
+    - "{prefix} {muted}Use {theme}/focolours <colour> {muted}to select directly."
+    - "{prefix} {muted}Use {theme}/focolours reset {muted}to return to {theme}{default_colour}{muted}."
+    - "{prefix} {muted}Unlocked colours: {theme}{available}"
+  admin-help:
+    - "{prefix} {muted}Use {theme}/focoloursadmin version {muted}to view plugin info."
+    - "{prefix} {muted}Use {theme}/focoloursadmin reload {muted}to reload config.yml, messages.yml, and guis/."
+    - "{prefix} {muted}Use {theme}/focoloursadmin editor {muted}to open the config editor."
+    - "{prefix} {muted}Use {theme}/focoloursadmin give <player> <colour> {muted}to unlock a colour."
+    - "{prefix} {muted}Use {theme}/focoloursadmin take <player> <colour> {muted}to remove a colour."
+    - "{prefix} {muted}Use {theme}/focoloursadmin convertezcolors <enable|disable|status> {muted}to control EzColors permission syncing."
+  prompts:
+    add-custom-colour:
+      - "Type: <colour> <Display Name>"
+      - "Examples: ##ff8844{white}ff8844 Sunset, &&6{white}6 Gold"
+      - "Formats: #RRGGBB, &#RRGGBB, RRGGBB, <#RRGGBB>, &&6{white}6"
+      - "Type cancel to stop."
+    rename-custom-colour:
+      - "{prefix} {muted}Type the new display name for {theme}{colour}{muted}."
+      - "{prefix} {muted}Type {theme}cancel {muted}to stop."

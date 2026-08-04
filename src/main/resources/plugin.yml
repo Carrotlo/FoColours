@@ -1,0 +1,27 @@
+name: FoColours
+description: ${project.description}
+version: ${project.version}
+main: me.foesio.foColours.FoColours
+api-version: '1.21'
+authors: [Carrotio]
+softdepend: [PlaceholderAPI]
+
+commands:
+  focolours:
+    description: Open the FoColours player menu or select a chat colour directly.
+    aliases: [colours, chatcolour, chatcolor]
+    permission: focolours.use
+    usage: /focolours [reset|colour]
+  focoloursadmin:
+    description: Open the FoColours admin tools.
+    aliases: [chatcolouradmin]
+    permission: focolours.admin
+    usage: /focoloursadmin <version|reload|editor|give|take|convertezcolors>
+
+permissions:
+  focolours.use:
+    description: Allows using the FoColours player command.
+    default: true
+  focolours.admin:
+    description: Allows using FoColours admin commands and editor features.
+    default: op

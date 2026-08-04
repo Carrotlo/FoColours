@@ -1,0 +1,91 @@
+# FoColours public player GUI.
+# Slot numbers are 0-based Minecraft inventory slots.
+# Placeholders: {colour} {preview} {status} {current_colour} {default_colour}
+
+gui:
+  shared:
+    filler-material: GRAY_STAINED_GLASS_PANE
+    empty-colour-material: LIGHT_GRAY_STAINED_GLASS_PANE
+    # Dynamic colour entry slots. 0-based inventory slots.
+    # Rows 2-4, columns 2-8. First and last column stay filler panes.
+    colour-slots:
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 19
+      - 20
+      - 21
+      - 22
+      - 23
+      - 24
+      - 25
+      - 28
+      - 29
+      - 30
+      - 31
+      - 32
+      - 33
+      - 34
+
+  states:
+    enabled: "{good}Enabled"
+    disabled: "{bad}Disabled"
+    unlocked: "{good}Unlocked"
+    locked: "{bad}Locked"
+    selected: "{theme}•"
+    unselected: "{white}•"
+    yes: "{good}Yes"
+    no: "{bad}No"
+    custom: "{theme}Custom"
+    built-in: "{muted}Built-in"
+
+  player-menu:
+    # Inventory rows. Valid range: 1-6.
+    rows: 6
+    title: "&8FoColours"
+    locked-material: BARRIER
+    items:
+      colour-unlocked:
+        amount: 1
+        custom-model-data: null
+        glow: false
+        name: "{theme}{colour}"
+        lore:
+          - "{white}Preview: {preview}"
+          - "{white}Status: {status}"
+          - "{white}Click to use this colour."
+      colour-locked:
+        amount: 1
+        custom-model-data: null
+        glow: false
+        name: "{bad}{colour}"
+        lore:
+          - "{white}Preview: {preview}"
+          - "{white}Status: {status}"
+      reset:
+        slot: 48
+        material: FEATHER
+        amount: 1
+        custom-model-data: null
+        glow: false
+        name: "{theme}Reset Colour"
+        lore:
+          - "{white}Return to {theme}{default_colour}{white}."
+          - "{white}Current: {theme}{current_colour}"
+      info:
+        slot: 50
+        material: BOOK
+        amount: 1
+        custom-model-data: null
+        glow: false
+        name: "{theme}Your Colours"
+        lore:
+          - "{white}Current: {theme}{current_colour}"
+          - "{white}Unlocked colours:"
+        unlocked-header: "{white} "
+        unlocked-entry: "{white}• {theme}{colour}"
+        empty-unlocked: "{white}• {theme}Light Gray"

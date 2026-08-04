@@ -1,0 +1,241 @@
+# Need help or want support? Join the Discord: https://discord.gg/kEF77QCfu7
+
+# FoColours configuration
+# Messages, GUI text colours, and text tokens are in messages.yml.
+
+features:
+  # Enables the player colour selection GUI opened by /focolours.
+  player-gui-enabled: true
+  # Shows locked colours in the player menu as unavailable options.
+  show-locked-colours: true
+
+chat:
+  # auto = FoColours colours chat messages directly, so no PlaceholderAPI token is needed.
+  # placeholder = leave chat messages alone and use %focolours_colour% in your chat plugin format.
+  # If auto conflicts with another chat plugin, switch this to placeholder.
+  mode: auto
+
+native-dialogs:
+  # Uses Minecraft's native dialog/input screens for search and text/number input when supported.
+  # Requires a compatible Paper or Paper-fork server with the Dialog API.
+  # Spigot and older versions automatically fall back to inventory/chat GUI mode.
+  # Set this to false to always use inventory/chat GUI mode.
+  enabled: true
+  # Sends admins a short warning when native dialogs are enabled but unavailable and the plugin falls back.
+  warn-on-fallback: true
+
+compatibility:
+  ezcolors:
+    # Enables one-time migration from EzColors permissions into FoColours player data.
+    enabled: true
+    # Sync EzColors permissions into player data when a player joins.
+    sync-on-join: true
+    # Delay the permission sync slightly so permissions plugins have time to attach nodes.
+    join-sync-delay-ticks: 20
+    # Sync EzColors permissions into player data during startup and reload.
+    sync-on-reload: true
+    # If true, grants that came from EzColors permissions are removed again
+    # if the permission is missing on a later sync.
+    revoke-missing-permission-grants: false
+    # If true, ezcolors.showrainbow also unlocks the rainbow preset.
+    showrainbow-unlocks-rainbow: true
+
+player-data:
+  # New players start with only this colour selected and unlocked.
+  default-colour: light_gray
+  default-unlocked-colours:
+    - light_gray
+
+rainbow:
+  # The palette used by the rainbow preset.
+  palette:
+    - "#ff5d73"
+    - "#ffbd2e"
+    - "#f7f779"
+    - "#3ecf8e"
+    - "#4dbdff"
+    - "#d37cff"
+  # If false, spaces do not advance the palette.
+  advance-on-spaces: false
+
+editor:
+  # New custom colours added through the editor use this item material.
+  default-custom-material: NAME_TAG
+
+gui:
+  admin-menu:
+    title: "&8FoColours Editor"
+    items:
+      manage-colours:
+        name: "{theme}Manage Colours"
+        lore:
+          - "{white}Toggle colours, set the default,"
+          - "{white}or remove custom colours."
+      chat-mode:
+        name: "{theme}Chat Mode"
+        lore:
+          - "{white}Current: {theme}{mode}"
+          - "{placeholder_state} placeholder"
+          - "{auto_state} auto"
+      show-locked:
+        name: "{theme}Show Locked Colours"
+        lore:
+          - "{white}Toggle locked colours in the player GUI."
+          - "{white}State: {state}"
+
+  colour-config-menu:
+    title: "&8Colour Manager"
+    items:
+      add-custom:
+        material: ANVIL
+        name: "{theme}Add Custom Colour"
+        lore:
+          - "{white}Click to add a new custom colour"
+          - "{white}with a colour value and name."
+      colour:
+        name: "{theme}{colour}"
+        lore:
+          - "{white}Preview: {preview}"
+          - "{white}Type: {custom_state}"
+          - "{white}Enabled: {status}"
+          - "{white}Default: {default_state}"
+          - "{white}Left-click: toggle enabled"
+          - "{white}Shift-left: set as default"
+          - "{white}Right-click: delete custom colour"
+          - "{white}Shift-right: rename custom colour"
+          - "{white}Place an item on a custom colour to change its icon"
+
+  confirm-delete-colour:
+    title: "&8Delete Colour?"
+    items:
+      confirm:
+        name: "{bad}Delete {colour}"
+        lore:
+          - "{white}This removes the custom colour."
+          - "{bad}Click to confirm."
+      cancel:
+        name: "{theme}Cancel"
+        lore:
+          - "{white}Return to colour manager."
+
+colours:
+  built-in:
+    light_gray:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&7"
+      display-name: "Light Gray"
+      material: LIGHT_GRAY_DYE
+      aliases: [lightgray, gray, grey, default]
+    black:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&0"
+      display-name: "Black"
+      material: INK_SAC
+      aliases: []
+    dark_blue:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&1"
+      display-name: "Dark Blue"
+      material: BLUE_DYE
+      aliases: []
+    dark_green:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&2"
+      display-name: "Dark Green"
+      material: GREEN_DYE
+      aliases: []
+    dark_aqua:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&3"
+      display-name: "Dark Aqua"
+      material: CYAN_DYE
+      aliases: []
+    dark_red:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&4"
+      display-name: "Dark Red"
+      material: RED_DYE
+      aliases: []
+    dark_purple:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&5"
+      display-name: "Dark Purple"
+      material: PURPLE_DYE
+      aliases: []
+    gold:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&6"
+      display-name: "Gold"
+      material: ORANGE_DYE
+      aliases: []
+    dark_gray:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&8"
+      display-name: "Dark Gray"
+      material: GRAY_DYE
+      aliases: [darkgrey]
+    blue:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&9"
+      display-name: "Blue"
+      material: LAPIS_LAZULI
+      aliases: []
+    green:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&a"
+      display-name: "Green"
+      material: LIME_DYE
+      aliases: []
+    aqua:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&b"
+      display-name: "Aqua"
+      material: LIGHT_BLUE_DYE
+      aliases: []
+    red:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&c"
+      display-name: "Red"
+      material: RED_TULIP
+      aliases: []
+    light_purple:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&d"
+      display-name: "Light Purple"
+      material: PINK_DYE
+      aliases: [pink]
+    yellow:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&e"
+      display-name: "Yellow"
+      material: YELLOW_DYE
+      aliases: []
+    white:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&f"
+      display-name: "White"
+      material: WHITE_DYE
+      aliases: []
+    rainbow:
+      enabled: true
+      type: RAINBOW
+      display-name: "Rainbow"
+      material: FIREWORK_STAR
+      aliases: []
+  custom: {}
