@@ -1,10 +1,17 @@
 package me.foesio.foColours.gui;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import me.foesio.core.dialog.DialogButton;
 import me.foesio.core.dialog.TextDialogRequest;
+import me.foesio.core.gui.EntryBrowserClick;
+import me.foesio.core.gui.EntryBrowserHolder;
+import me.foesio.core.gui.EntryBrowserMenus;
+import me.foesio.core.gui.EntryBrowserRequest;
 import me.foesio.core.gui.GuiButtonConfig;
 import me.foesio.core.gui.GuiItems;
-import me.foesio.core.gui.GuiSlots;
 import me.foesio.core.reload.FoReloadResult;
 import me.foesio.foColours.FoColours;
 import me.foesio.foColours.color.ChatColorDefinition;
@@ -14,118 +21,115 @@ import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-
-public final class ColourConfigMenu extends BaseMenu {
+public final class ColourConfigMenu {
 
     private static final GuiButtonConfig BUTTONS = GuiButtonConfig.defaults();
-    private static final int ROWS = 6;
-    private static final int BACK_SLOT = GuiSlots.bottomMiddleSlot(ROWS);
-    private static final int ADD_CUSTOM_SLOT = 47;
     private static final int ADD_CUSTOM_INPUT_MAX_LENGTH = 43;
 
+    private final FoColours plugin;
     private final int page;
+    private final String filter;
 
     public ColourConfigMenu(FoColours plugin) {
-        this(plugin, 0);
+        this(plugin, 0, "");
     }
 
     ColourConfigMenu(FoColours plugin, int page) {
-        super(plugin, GuiSlots.sizeForRows(ROWS), plugin.getConfigManager().title("gui.colour-config-menu.title"));
+        this(plugin, page, "");
+    }
+
+    ColourConfigMenu(FoColours plugin, int page, String filter) {
+        this.plugin = plugin;
         this.page = Math.max(0, page);
+        this.filter = filter == null ? "" : filter.trim();
     }
 
-    @Override
-    protected void draw(Player viewer) {
-        fill(plugin.getConfigManager().getMaterial("gui.shared.filler-material", Material.GRAY_STAINED_GLASS_PANE));
-
-        List<Integer> colourSlots = plugin.getConfigManager().getGuiSlots("gui.shared.colour-slots", inventory.getSize());
-        List<ChatColorDefinition> definitions = plugin.getColorRegistry().getAllColours().stream().toList();
-        int pageSize = colourSlots.size();
-        int maxPage = maxPage(definitions.size(), pageSize);
-        int activePage = Math.min(page, maxPage);
-        int startIndex = activePage * pageSize;
-
-        for (int index = 0; index < colourSlots.size(); index++) {
-            int definitionIndex = startIndex + index;
-            if (definitionIndex >= definitions.size()) {
-                setEmptyColourSlot(colourSlots.get(index));
-                continue;
-            }
-
-            ChatColorDefinition definition = definitions.get(definitionIndex);
-            Map<String, String> placeholders = new HashMap<>();
-            placeholders.put("colour", definition.getDisplayName());
-            placeholders.put("preview", definition.getPreviewLabel(plugin.getConfigManager()));
-            placeholders.put("status", definition.isEnabled()
-                    ? plugin.getConfigManager().message("gui.states.enabled")
-                    : plugin.getConfigManager().message("gui.states.disabled"));
-            placeholders.put("default_state", definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey())
-                    ? plugin.getConfigManager().message("gui.states.yes")
-                    : plugin.getConfigManager().message("gui.states.no"));
-            placeholders.put("custom_state", definition.isCustom()
-                    ? plugin.getConfigManager().message("gui.states.custom")
-                    : plugin.getConfigManager().message("gui.states.built-in"));
-
-            boolean glowing = definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey());
-            setItem(colourSlots.get(index), GuiItems.create(
-                    definition.getMaterial(),
-                    plugin.getConfigManager().message("gui.colour-config-menu.items.colour.name", placeholders),
-                    plugin.getConfigManager().messageList("gui.colour-config-menu.items.colour.lore", placeholders),
-                    glowing
-            ));
-        }
-
-        drawPageButtons(activePage, maxPage);
-        setItem(BACK_SLOT, BUTTONS.back());
-        setItem(ADD_CUSTOM_SLOT, GuiItems.create(
-                plugin.getConfigManager().getMaterial("gui.colour-config-menu.items.add-custom.material", Material.ANVIL),
-                plugin.getConfigManager().message("gui.colour-config-menu.items.add-custom.name"),
-                plugin.getConfigManager().messageList("gui.colour-config-menu.items.add-custom.lore", Map.of())
-        ));
+    static boolean owns(EntryBrowserHolder holder) {
+        return holder != null && holder.request().context() instanceof ColourBrowserContext;
     }
 
-    @Override
-    public void handleClick(InventoryClickEvent event) {
+    public void open(Player player) {
+        EntryBrowserMenus.open(player, request());
+    }
+
+    void handleEntryBrowserClick(InventoryClickEvent event, EntryBrowserHolder holder) {
         if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
 
-        int slot = event.getRawSlot();
-        List<Integer> colourSlots = plugin.getConfigManager().getGuiSlots("gui.shared.colour-slots", event.getView().getTopInventory().getSize());
-        List<ChatColorDefinition> definitions = plugin.getColorRegistry().getAllColours().stream().toList();
-        int pageSize = colourSlots.size();
-        int maxPage = maxPage(definitions.size(), pageSize);
-        int activePage = Math.min(page, maxPage);
+        EntryBrowserClick click = EntryBrowserMenus.handleClick(event.getRawSlot(), holder, event.getClick());
+        switch (click.action()) {
+            case ENTRY -> handleColourClick(player, click.entryId(), click.clickType(), event.getCursor(), holder.request().page());
+            case ADD -> openAddCustomColourInput(player, holder.request().page(), holder.request().filter());
+            case BACK -> new AdminEditorMenu(plugin).open(player);
+            case SEARCH -> openSearchInput(player, holder.request().filter());
+            case CLEAR_SEARCH -> new ColourConfigMenu(plugin, 0, "").open(player);
+            case PREVIOUS_PAGE -> new ColourConfigMenu(plugin, holder.request().page() - 1, holder.request().filter()).open(player);
+            case NEXT_PAGE -> new ColourConfigMenu(plugin, holder.request().page() + 1, holder.request().filter()).open(player);
+            case EXTRA, NONE -> {
+            }
+        }
+    }
 
-        if (slot == previousPageSlot(event.getView().getTopInventory().getSize()) && activePage > 0) {
-            new ColourConfigMenu(plugin, activePage - 1).open(player);
-            return;
-        }
-        if (slot == nextPageSlot(event.getView().getTopInventory().getSize()) && activePage < maxPage) {
-            new ColourConfigMenu(plugin, activePage + 1).open(player);
-            return;
-        }
-        if (slot == BACK_SLOT) {
-            new AdminEditorMenu(plugin).open(player);
-            return;
-        }
-        if (slot == ADD_CUSTOM_SLOT) {
-            openAddCustomColourInput(player, activePage);
+    private EntryBrowserRequest request() {
+        List<EntryBrowserRequest.Entry> entries = filteredDefinitions().stream()
+                .map(definition -> EntryBrowserRequest.Entry.of(definition.getKey(), colourItem(definition)))
+                .toList();
+        return EntryBrowserRequest.builder()
+                .title(plugin.getConfigManager().title("gui.colour-config-menu.title"))
+                .entries(entries)
+                .page(page)
+                .filter(filter)
+                .buttons(BUTTONS)
+                .showBack(true)
+                .addButton(GuiItems.create(
+                        plugin.getConfigManager().getMaterial("gui.colour-config-menu.items.add-custom.material", Material.ANVIL),
+                        plugin.getConfigManager().message("gui.colour-config-menu.items.add-custom.name"),
+                        plugin.getConfigManager().messageList("gui.colour-config-menu.items.add-custom.lore", Map.of())
+                ))
+                .context(new ColourBrowserContext())
+                .build();
+    }
+
+    private List<ChatColorDefinition> filteredDefinitions() {
+        String normalized = filter.toLowerCase(Locale.ROOT);
+        return plugin.getColorRegistry().getAllColours().stream()
+                .filter(definition -> normalized.isBlank()
+                        || definition.getKey().toLowerCase(Locale.ROOT).contains(normalized)
+                        || definition.getDisplayName().toLowerCase(Locale.ROOT).contains(normalized)
+                        || definition.getPreviewLabel(plugin.getConfigManager()).toLowerCase(Locale.ROOT).contains(normalized))
+                .toList();
+    }
+
+    private ItemStack colourItem(ChatColorDefinition definition) {
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("colour", definition.getDisplayName());
+        placeholders.put("preview", definition.getPreviewLabel(plugin.getConfigManager()));
+        placeholders.put("status", definition.isEnabled()
+                ? plugin.getConfigManager().message("gui.states.enabled")
+                : plugin.getConfigManager().message("gui.states.disabled"));
+        placeholders.put("default_state", definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey())
+                ? plugin.getConfigManager().message("gui.states.yes")
+                : plugin.getConfigManager().message("gui.states.no"));
+        placeholders.put("custom_state", definition.isCustom()
+                ? plugin.getConfigManager().message("gui.states.custom")
+                : plugin.getConfigManager().message("gui.states.built-in"));
+
+        return GuiItems.create(
+                definition.getMaterial(),
+                plugin.getConfigManager().message("gui.colour-config-menu.items.colour.name", placeholders),
+                plugin.getConfigManager().messageList("gui.colour-config-menu.items.colour.lore", placeholders),
+                definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey())
+        );
+    }
+
+    private void handleColourClick(Player player, String key, ClickType clickType, ItemStack cursor, int returnPage) {
+        ChatColorDefinition definition = plugin.getColorRegistry().getColour(key).orElse(null);
+        if (definition == null) {
+            new ColourConfigMenu(plugin, returnPage, filter).open(player);
             return;
         }
 
-        int index = colourSlots.indexOf(slot);
-        int definitionIndex = activePage * pageSize + index;
-        if (index < 0 || definitionIndex >= definitions.size()) {
-            return;
-        }
-
-        ChatColorDefinition definition = definitions.get(definitionIndex);
-        ItemStack cursor = event.getCursor();
         if (definition.isCustom() && cursor != null && cursor.getType() != Material.AIR) {
             plugin.getConfigManager().set("colours.custom." + definition.getKey() + ".material", cursor.getType().name());
             if (!reloadOrNotify(player)) {
@@ -135,16 +139,16 @@ public final class ColourConfigMenu extends BaseMenu {
                     "colour", definition.getDisplayName(),
                     "item", cursor.getType().name()
             )));
-            new ColourConfigMenu(plugin, activePage).open(player);
+            new ColourConfigMenu(plugin, returnPage, filter).open(player);
             return;
         }
 
-        if (event.getClick() == ClickType.SHIFT_RIGHT && definition.isCustom()) {
-            openRenameInput(player, definition, activePage);
+        if (clickType == ClickType.SHIFT_RIGHT && definition.isCustom()) {
+            openRenameInput(player, definition, returnPage);
             return;
         }
 
-        if (event.getClick() == ClickType.SHIFT_LEFT) {
+        if (clickType == ClickType.SHIFT_LEFT) {
             if (!definition.isEnabled()) {
                 player.sendMessage(plugin.getConfigManager().message("messages.colour-must-be-enabled-first"));
                 return;
@@ -155,17 +159,17 @@ public final class ColourConfigMenu extends BaseMenu {
                 return;
             }
             player.sendMessage(plugin.getConfigManager().message("messages.default-colour-set", Map.of("colour", definition.getDisplayName())));
-            new ColourConfigMenu(plugin, activePage).open(player);
+            new ColourConfigMenu(plugin, returnPage, filter).open(player);
             return;
         }
 
-        if (event.getClick() == ClickType.RIGHT && definition.isCustom()) {
+        if (clickType == ClickType.RIGHT && definition.isCustom()) {
             if (definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey())) {
                 player.sendMessage(plugin.getConfigManager().message("messages.cannot-remove-default-custom"));
                 return;
             }
 
-            new ConfirmDeleteCustomColourMenu(plugin, definition.getKey(), definition.getDisplayName(), activePage).open(player);
+            new ConfirmDeleteCustomColourMenu(plugin, definition.getKey(), definition.getDisplayName(), returnPage, filter).open(player);
             return;
         }
 
@@ -180,11 +184,32 @@ public final class ColourConfigMenu extends BaseMenu {
             return;
         }
         player.sendMessage(plugin.getConfigManager().message("messages.editor-saved"));
-        new ColourConfigMenu(plugin, activePage).open(player);
+        new ColourConfigMenu(plugin, returnPage, filter).open(player);
     }
 
-    private int previousPageSlot(int inventorySize) {
-        return Math.max(0, inventorySize - GuiSlots.ROW_SIZE);
+    private void openSearchInput(Player player, String currentFilter) {
+        TextDialogRequest request = new TextDialogRequest(
+                "Search",
+                List.of("Search colour names, keys, or previews."),
+                "Search",
+                currentFilter,
+                "Colour name or key",
+                DialogButton.search(),
+                DialogButton.cancel(),
+                320,
+                300,
+                64,
+                true,
+                true,
+                false
+        );
+        plugin.openEditorTextInput(
+                player,
+                request,
+                input -> true,
+                input -> new ColourConfigMenu(plugin, 0, input).open(player),
+                () -> new ColourConfigMenu(plugin, page, currentFilter).open(player)
+        );
     }
 
     private void openRenameInput(Player player, ChatColorDefinition definition, int activePage) {
@@ -218,11 +243,11 @@ public final class ColourConfigMenu extends BaseMenu {
                             "colour", input
                     )));
                 },
-                () -> new ColourConfigMenu(plugin, activePage).open(player)
+                () -> new ColourConfigMenu(plugin, activePage, filter).open(player)
         );
     }
 
-    private void openAddCustomColourInput(Player player, int activePage) {
+    private void openAddCustomColourInput(Player player, int activePage, String activeFilter) {
         TextDialogRequest request = new TextDialogRequest(
                 "Add Custom Colour",
                 plugin.getConfigManager().messageList("messages.prompts.add-custom-colour", Map.of()),
@@ -262,7 +287,7 @@ public final class ColourConfigMenu extends BaseMenu {
                             "value", colourValue.visibleValue()
                     )));
                 },
-                () -> new ColourConfigMenu(plugin, activePage).open(player)
+                () -> new ColourConfigMenu(plugin, activePage, activeFilter).open(player)
         );
     }
 
@@ -273,10 +298,7 @@ public final class ColourConfigMenu extends BaseMenu {
         }
         String displayName = customInput.displayName();
         CustomColourValue colourValue = customInput.colourValue();
-        if (colourValue == null) {
-            return false;
-        }
-        return !displayName.isBlank() && !nextCustomColourKey(displayName).isBlank();
+        return colourValue != null && !displayName.isBlank() && !nextCustomColourKey(displayName).isBlank();
     }
 
     private CustomColourInput parseCustomColourInput(String input) {
@@ -351,32 +373,7 @@ public final class ColourConfigMenu extends BaseMenu {
         return false;
     }
 
-    private int nextPageSlot(int inventorySize) {
-        return Math.max(0, inventorySize - 1);
-    }
-
-    private int maxPage(int totalEntries, int pageSize) {
-        if (pageSize <= 0 || totalEntries <= 0) {
-            return 0;
-        }
-        return (totalEntries - 1) / pageSize;
-    }
-
-    private void setEmptyColourSlot(int slot) {
-        setItem(slot, GuiItems.create(
-                plugin.getConfigManager().getMaterial("gui.shared.empty-colour-material", Material.LIGHT_GRAY_STAINED_GLASS_PANE),
-                " ",
-                List.of()
-        ));
-    }
-
-    private void drawPageButtons(int activePage, int maxPage) {
-        if (activePage > 0) {
-            setItem(previousPageSlot(inventory.getSize()), BUTTONS.previousPage(activePage - 1, maxPage));
-        }
-        if (activePage < maxPage) {
-            setItem(nextPageSlot(inventory.getSize()), BUTTONS.nextPage(activePage + 1, maxPage));
-        }
+    private record ColourBrowserContext() {
     }
 
     private record CustomColourValue(String type, String hex, String legacyCode, String visibleValue) {

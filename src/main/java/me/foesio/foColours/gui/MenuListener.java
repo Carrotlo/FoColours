@@ -1,6 +1,7 @@
 package me.foesio.foColours.gui;
 
 import me.foesio.core.editor.EditorMenuHolder;
+import me.foesio.core.gui.EntryBrowserHolder;
 import me.foesio.foColours.FoColours;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -19,6 +20,16 @@ public final class MenuListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
+        if (event.getView().getTopInventory().getHolder() instanceof EntryBrowserHolder entryHolder
+                && ColourConfigMenu.owns(entryHolder)) {
+            event.setCancelled(true);
+            if (event.getClickedInventory() == event.getView().getTopInventory()) {
+                new ColourConfigMenu(plugin, entryHolder.request().page(), entryHolder.request().filter())
+                        .handleEntryBrowserClick(event, entryHolder);
+            }
+            return;
+        }
+
         if (event.getView().getTopInventory().getHolder() instanceof EditorMenuHolder editorHolder
                 && AdminEditorMenu.owns(editorHolder)) {
             event.setCancelled(true);
@@ -48,7 +59,8 @@ public final class MenuListener implements Listener {
 
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
-        if ((event.getView().getTopInventory().getHolder() instanceof BaseMenu
+        if ((event.getView().getTopInventory().getHolder() instanceof EntryBrowserHolder
+                || event.getView().getTopInventory().getHolder() instanceof BaseMenu
                 || event.getView().getTopInventory().getHolder() instanceof EditorMenuHolder editorHolder
                 && AdminEditorMenu.owns(editorHolder))
                 && event.getRawSlots().stream().anyMatch(rawSlot -> rawSlot < event.getView().getTopInventory().getSize())) {

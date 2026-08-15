@@ -18,6 +18,7 @@ public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
     private final String colourKey;
     private final String displayName;
     private final int returnPage;
+    private final String returnFilter;
     private boolean handled;
 
     public ConfirmDeleteCustomColourMenu(FoColours plugin, String colourKey, String displayName) {
@@ -25,10 +26,15 @@ public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
     }
 
     public ConfirmDeleteCustomColourMenu(FoColours plugin, String colourKey, String displayName, int returnPage) {
+        this(plugin, colourKey, displayName, returnPage, "");
+    }
+
+    public ConfirmDeleteCustomColourMenu(FoColours plugin, String colourKey, String displayName, int returnPage, String returnFilter) {
         super(plugin, 27, plugin.getConfigManager().title("gui.confirm-delete-colour.title"));
         this.colourKey = colourKey;
         this.displayName = displayName;
         this.returnPage = Math.max(0, returnPage);
+        this.returnFilter = returnFilter == null ? "" : returnFilter;
     }
 
     @Override
@@ -61,13 +67,13 @@ public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
                 return;
             }
             player.sendMessage(plugin.getConfigManager().message("messages.custom-colour-removed", placeholders()));
-            new ColourConfigMenu(plugin, returnPage).open(player);
+            new ColourConfigMenu(plugin, returnPage, returnFilter).open(player);
             return;
         }
 
         if (event.getRawSlot() == CANCEL_SLOT) {
             handled = true;
-            new ColourConfigMenu(plugin, returnPage).open(player);
+            new ColourConfigMenu(plugin, returnPage, returnFilter).open(player);
         }
     }
 
@@ -77,7 +83,7 @@ public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
             return;
         }
 
-        plugin.coreScheduler().runForPlayer(player, () -> new ColourConfigMenu(plugin, returnPage).open(player));
+        plugin.coreScheduler().runForPlayer(player, () -> new ColourConfigMenu(plugin, returnPage, returnFilter).open(player));
     }
 
     private Map<String, String> placeholders() {
