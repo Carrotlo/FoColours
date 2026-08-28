@@ -13,6 +13,10 @@ import me.foesio.core.message.FoMessageService;
 import me.foesio.core.reload.FoReloadRegistry;
 import me.foesio.core.reload.FoReloadResult;
 import me.foesio.core.scheduler.FoScheduler;
+import me.foesio.core.sound.FoAdminSounds;
+import me.foesio.core.sound.FoEditorSounds;
+import me.foesio.core.sound.FoGuiSounds;
+import me.foesio.core.sound.FoSoundService;
 import me.foesio.core.update.UpdateNoticeService;
 import me.foesio.foColours.color.ColorRegistry;
 import me.foesio.foColours.compat.EzColorsCompatService;
@@ -29,6 +33,7 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -58,6 +63,10 @@ public final class FoColours extends JavaPlugin {
     private EzColorsCompatService ezColorsCompatService;
     private DialogService dialogService;
     private UpdateNoticeService updateNotices;
+    private FoSoundService sounds;
+    private FoEditorSounds editorSounds;
+    private FoGuiSounds guiSounds;
+    private FoAdminSounds adminSounds;
     private boolean placeholderHookRegistered;
     private final Set<UUID> nativeDialogFallbackWarnedPlayers = new HashSet<>();
 
@@ -68,7 +77,7 @@ public final class FoColours extends JavaPlugin {
         this.configManager = new ConfigManager(this);
         this.messages = FoMessageService.load(this, messageMigrations());
         this.configManager.setMessages(messages);
-        refreshCoreContext(true);
+        refreshCoreContext();
         this.colorRegistry = new ColorRegistry(configManager);
         this.playerDataManager = new PlayerDataManager(this, configManager);
         this.ezColorsCompatService = new EzColorsCompatService(configManager, colorRegistry, playerDataManager);
@@ -109,12 +118,14 @@ public final class FoColours extends JavaPlugin {
         FoReloadResult result = FoReloadRegistry.create()
                 .add("config", configManager::reload)
                 .addMessages(messages)
-                .add("core", () -> refreshCoreContext(false))
+                .add("core", this::refreshCoreContext)
+                .add("sounds", () -> sounds.reload())
                 .add("colours", colorRegistry::reload)
                 .add("player-data", () -> playerDataManager.normalizeOnlineSelections(colorRegistry, configManager.getDefaultColourKey()))
                 .add("ezcolors", ezColorsCompatService::syncOnlinePlayersIfConfigured)
                 .add("placeholders", this::refreshPlaceholderHook)
                 .add("dialogs", this::refreshDialogService)
+                .add("admin commands", this::registerCommands)
                 .reload();
         if (!result.successful()) {
             logWarning("Reload failed at " + result.failedStep() + ": " + result.errorMessage());
@@ -154,7 +165,7 @@ public final class FoColours extends JavaPlugin {
         Objects.requireNonNull(onAccept, "onAccept");
         Objects.requireNonNull(reopenAction, "reopenAction");
 
-        return EditorDialogInputs.openTextFromInventory(
+        boolean openedNative = EditorDialogInputs.openTextFromInventory(
                 this,
                 core.inventoryCloseSuppressor(),
                 dialogService,
@@ -162,6 +173,7 @@ public final class FoColours extends JavaPlugin {
                 request,
                 input -> {
                     if (input.length() > request.maxLength() || !validator.test(input)) {
+                        editorSounds.error(player);
                         player.sendMessage(configManager.message("messages.prompt-invalid"));
                         openEditorTextInput(player, request, validator, onAccept, reopenAction);
                         return;
@@ -172,9 +184,14 @@ public final class FoColours extends JavaPlugin {
                 },
                 () -> {
                     player.sendMessage(configManager.message("messages.prompt-cancelled"));
+                    editorSounds.back(player);
                     reopenAction.run();
                 }
         );
+        if (openedNative) {
+            editorSounds.open(player);
+        }
+        return openedNative;
     }
 
     public boolean consumeSuppressedInventoryClose(Player player) {
@@ -189,6 +206,22 @@ public final class FoColours extends JavaPlugin {
         return updateNotices;
     }
 
+    public FoSoundService getSounds() {
+        return sounds;
+    }
+
+    public FoEditorSounds getEditorSounds() {
+        return editorSounds;
+    }
+
+    public FoGuiSounds getGuiSounds() {
+        return guiSounds;
+    }
+
+    public FoAdminSounds getAdminSounds() {
+        return adminSounds;
+    }
+
     public FoScheduler coreScheduler() {
         return core.scheduler();
     }
@@ -196,6 +229,9 @@ public final class FoColours extends JavaPlugin {
     public void sendReloadResult(CommandSender sender, FoReloadResult result) {
         if (result.successful()) {
             sender.sendMessage(configManager.message("messages.reload-complete"));
+            if (sender instanceof Player player) {
+                adminSounds.reload(player);
+            }
             return;
         }
 
@@ -203,6 +239,9 @@ public final class FoColours extends JavaPlugin {
                 "step", result.failedStep(),
                 "error", result.errorMessage()
         )));
+        if (sender instanceof Player player) {
+            adminSounds.reloadError(player);
+        }
     }
 
     public void logInfo(String message) {
@@ -230,16 +269,21 @@ public final class FoColours extends JavaPlugin {
         pluginManager.registerEvents(new ChatListener(chatColorService, configManager), this);
     }
 
-    private void refreshCoreContext(boolean startUpdateNotices) {
+    private void refreshCoreContext() {
         if (core != null) {
             core.close();
         }
 
         this.core = FoPluginCore.create(this);
+        this.sounds = core.createSounds();
+        this.editorSounds = FoEditorSounds.create(sounds);
+        this.guiSounds = FoGuiSounds.create(sounds);
+        this.adminSounds = FoAdminSounds.create(sounds);
         this.core.metrics(BSTATS_ID);
-        if (startUpdateNotices || updateNotices == null) {
-            this.updateNotices = core.createUpdateNotices(messages, MODRINTH_PROJECT_ID).start();
+        if (updateNotices != null) {
+            HandlerList.unregisterAll(updateNotices);
         }
+        this.updateNotices = core.createUpdateNotices(messages, MODRINTH_PROJECT_ID, adminSounds).start();
     }
 
     private void refreshDialogService() {

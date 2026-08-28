@@ -36,6 +36,7 @@ public final class FoColoursAdminCommand {
                 .commandName("focoloursadmin")
                 .permission(PERMISSION)
                 .versionCommand(false)
+                .adminSounds(plugin.getAdminSounds())
                 .adminMessages(adminMessages())
                 .defaultExecutor(this::sendHelp)
                 .addSubcommand(FoAdminSubcommand.builder("version", this::version)
@@ -99,6 +100,7 @@ public final class FoColoursAdminCommand {
         String mode = context.subArg(0);
         if (mode.isBlank()) {
             sender.sendMessage(plugin.getConfigManager().message("messages.ezcolors-toggle-usage"));
+            plugin.getAdminSounds().updateError(sender);
             return true;
         }
 
@@ -115,6 +117,7 @@ public final class FoColoursAdminCommand {
             }
             default -> {
                 sender.sendMessage(plugin.getConfigManager().message("messages.ezcolors-toggle-usage"));
+                plugin.getAdminSounds().updateError(sender);
                 yield true;
             }
         };
@@ -150,18 +153,21 @@ public final class FoColoursAdminCommand {
     private boolean give(FoAdminCommandContext context) {
         if (context.subArgs().length < 2) {
             context.sender().sendMessage(plugin.getConfigManager().message("messages.admin-usage-give"));
+            plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         Optional<KnownPlayer> target = plugin.getPlayerDataManager().resolveKnownPlayer(context.subArg(0));
         if (target.isEmpty()) {
             context.sender().sendMessage(plugin.getConfigManager().message("messages.unknown-player", service.basePlaceholders("player", context.subArg(0))));
+            plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         Optional<ChatColorDefinition> colour = compatService.findCompatibleColour(context.subArg(1));
         if (colour.isEmpty()) {
             context.sender().sendMessage(plugin.getConfigManager().message("messages.unknown-colour", service.basePlaceholders("colour", context.subArg(1))));
+            plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
@@ -170,6 +176,7 @@ public final class FoColoursAdminCommand {
                     "player", target.get().name(),
                     "colour", colour.get().getDisplayName()
             )));
+            plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
@@ -183,23 +190,27 @@ public final class FoColoursAdminCommand {
     private boolean take(FoAdminCommandContext context) {
         if (context.subArgs().length < 2) {
             context.sender().sendMessage(plugin.getConfigManager().message("messages.admin-usage-take"));
+            plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         Optional<KnownPlayer> target = plugin.getPlayerDataManager().resolveKnownPlayer(context.subArg(0));
         if (target.isEmpty()) {
             context.sender().sendMessage(plugin.getConfigManager().message("messages.unknown-player", service.basePlaceholders("player", context.subArg(0))));
+            plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         Optional<ChatColorDefinition> colour = compatService.findCompatibleColour(context.subArg(1));
         if (colour.isEmpty()) {
             context.sender().sendMessage(plugin.getConfigManager().message("messages.unknown-colour", service.basePlaceholders("colour", context.subArg(1))));
+            plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         if (colour.get().getKey().equals(plugin.getConfigManager().getDefaultColourKey())) {
             context.sender().sendMessage(plugin.getConfigManager().message("messages.cannot-take-default"));
+            plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
@@ -208,6 +219,7 @@ public final class FoColoursAdminCommand {
                     "player", target.get().name(),
                     "colour", colour.get().getDisplayName()
             )));
+            plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 

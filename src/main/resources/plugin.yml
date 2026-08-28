@@ -10,12 +10,10 @@ commands:
   focolours:
     description: Open the FoColours player menu or select a chat colour directly.
     aliases: [colours, chatcolour, chatcolor]
-    permission: focolours.use
     usage: /focolours [reset|colour]
   focoloursadmin:
     description: Open the FoColours admin tools.
     aliases: [chatcolouradmin]
-    permission: focolours.admin
     usage: /focoloursadmin <version|reload|editor|give|take|convertezcolors>
 
 permissions:

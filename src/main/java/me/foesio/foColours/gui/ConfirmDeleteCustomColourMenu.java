@@ -1,5 +1,6 @@
 package me.foesio.foColours.gui;
 
+import me.foesio.core.editor.EditorItemFactory;
 import me.foesio.core.reload.FoReloadResult;
 import me.foesio.core.gui.GuiItems;
 import me.foesio.foColours.FoColours;
@@ -13,7 +14,7 @@ import java.util.Map;
 public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
 
     private static final int CONFIRM_SLOT = 11;
-    private static final int CANCEL_SLOT = 15;
+    private static final int CANCEL_SLOT = 22;
 
     private final String colourKey;
     private final String displayName;
@@ -45,11 +46,7 @@ public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
                 plugin.getConfigManager().message("gui.confirm-delete-colour.items.confirm.name", placeholders()),
                 plugin.getConfigManager().messageList("gui.confirm-delete-colour.items.confirm.lore", placeholders())
         ));
-        setItem(CANCEL_SLOT, GuiItems.create(
-                Material.BARRIER,
-                plugin.getConfigManager().message("gui.confirm-delete-colour.items.cancel.name"),
-                plugin.getConfigManager().messageList("gui.confirm-delete-colour.items.cancel.lore", Map.of())
-        ));
+        setItem(CANCEL_SLOT, EditorItemFactory.back());
     }
 
     @Override
@@ -66,14 +63,16 @@ public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
                 plugin.sendReloadResult(player, result);
                 return;
             }
+            plugin.getEditorSounds().delete(player);
             player.sendMessage(plugin.getConfigManager().message("messages.custom-colour-removed", placeholders()));
-            new ColourConfigMenu(plugin, returnPage, returnFilter).open(player);
+            new ColourConfigMenu(plugin, returnPage, returnFilter).openSilently(player);
             return;
         }
 
         if (event.getRawSlot() == CANCEL_SLOT) {
             handled = true;
-            new ColourConfigMenu(plugin, returnPage, returnFilter).open(player);
+            plugin.getEditorSounds().back(player);
+            new ColourConfigMenu(plugin, returnPage, returnFilter).openSilently(player);
         }
     }
 
@@ -83,7 +82,7 @@ public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
             return;
         }
 
-        plugin.coreScheduler().runForPlayer(player, () -> new ColourConfigMenu(plugin, returnPage, returnFilter).open(player));
+        plugin.coreScheduler().runForPlayer(player, () -> new ColourConfigMenu(plugin, returnPage, returnFilter).openSilently(player));
     }
 
     private Map<String, String> placeholders() {

@@ -27,9 +27,24 @@ public abstract class BaseMenu implements InventoryHolder {
     }
 
     public void open(Player player) {
+        open(player, true);
+    }
+
+    protected void openSilently(Player player) {
+        open(player, false);
+    }
+
+    private void open(Player player, boolean playOpenSound) {
         inventory = Bukkit.createInventory(this, size, title);
         draw(player);
+        if (playOpenSound) {
+            openSound(player);
+        }
         player.openInventory(inventory);
+    }
+
+    protected void openSound(Player player) {
+        plugin.getEditorSounds().open(player);
     }
 
     protected abstract void draw(Player viewer);

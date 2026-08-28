@@ -28,6 +28,11 @@ public final class PlayerColorMenu extends BaseMenu {
         this(plugin, 0);
     }
 
+    @Override
+    protected void openSound(Player player) {
+        plugin.getSounds().play(player, "player.open");
+    }
+
     private PlayerColorMenu(FoColours plugin, int page) {
         super(plugin, plugin.getConfigManager().getGuiSize("gui.player-menu.rows", 6), plugin.getConfigManager().title("gui.player-menu.title"));
         this.service = plugin.getChatColorService();
@@ -97,17 +102,20 @@ public final class PlayerColorMenu extends BaseMenu {
         int activePage = Math.min(page, maxPage);
 
         if (slot == previousPageSlot(inventorySize) && activePage > 0) {
-            new PlayerColorMenu(plugin, activePage - 1).open(player);
+            plugin.getSounds().play(player, "player.page-previous");
+            new PlayerColorMenu(plugin, activePage - 1).openSilently(player);
             return;
         }
         if (slot == nextPageSlot(inventorySize) && activePage < maxPage) {
-            new PlayerColorMenu(plugin, activePage + 1).open(player);
+            plugin.getSounds().play(player, "player.page-next");
+            new PlayerColorMenu(plugin, activePage + 1).openSilently(player);
             return;
         }
         if (slot == resetSlot(inventorySize)) {
             service.resetColour(player);
+            plugin.getSounds().play(player, "player.reset");
             player.sendMessage(plugin.getConfigManager().message("messages.reset-success", service.commandContext(player)));
-            new PlayerColorMenu(plugin, activePage).open(player);
+            new PlayerColorMenu(plugin, activePage).openSilently(player);
             return;
         }
 
@@ -119,18 +127,21 @@ public final class PlayerColorMenu extends BaseMenu {
 
         ChatColorDefinition definition = definitions.get(definitionIndex);
         if (!service.hasUnlocked(player, definition.getKey())) {
+            plugin.getSounds().play(player, "player.error");
             player.sendMessage(plugin.getConfigManager().message("messages.not-unlocked", service.commandContext(player, "colour", definition.getDisplayName())));
             return;
         }
 
         if (service.isSelected(player, definition.getKey())) {
+            plugin.getSounds().play(player, "player.error");
             player.sendMessage(plugin.getConfigManager().message("messages.already-selected", service.commandContext(player, "colour", definition.getDisplayName())));
             return;
         }
 
         service.selectColour(player, definition.getKey());
+        plugin.getSounds().playWithPitchVariation(player, "player.select", 0.05f);
         player.sendMessage(plugin.getConfigManager().message("messages.select-success", service.commandContext(player, "colour", definition.getDisplayName())));
-        new PlayerColorMenu(plugin, activePage).open(player);
+        new PlayerColorMenu(plugin, activePage).openSilently(player);
     }
 
     private List<String> buildInfoLore(Player viewer) {

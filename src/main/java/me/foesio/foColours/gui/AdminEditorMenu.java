@@ -33,6 +33,17 @@ public final class AdminEditorMenu {
     }
 
     public void open(Player player) {
+        open(player, true);
+    }
+
+    void openSilently(Player player) {
+        open(player, false);
+    }
+
+    private void open(Player player, boolean playOpenSound) {
+        if (playOpenSound) {
+            plugin.getEditorSounds().open(player);
+        }
         editor().open(player);
     }
 
@@ -131,8 +142,10 @@ public final class AdminEditorMenu {
     }
 
     private void saveBoolean(Player player, ConfigEditorButton button) {
+        boolean nextValue = !plugin.getConfigManager().getConfig().getBoolean(button.configPath());
         EditorSaveResult result = editor().toggle(button);
         if (!result.successful()) {
+            plugin.getEditorSounds().error(player);
             player.sendMessage(plugin.getConfigManager().message("messages.reload-failed", Map.of(
                     "step", button.configPath(),
                     "error", result.errorMessage()
@@ -141,7 +154,8 @@ public final class AdminEditorMenu {
         }
 
         player.sendMessage(plugin.getConfigManager().message("messages.editor-saved"));
-        open(player);
+        plugin.getEditorSounds().toggle(player, nextValue);
+        openSilently(player);
     }
 
     private void cycleChatMode(Player player) {
@@ -152,10 +166,12 @@ public final class AdminEditorMenu {
         FoReloadResult result = plugin.reloadPluginState();
         if (!result.successful()) {
             plugin.sendReloadResult(player, result);
+            plugin.getEditorSounds().error(player);
             return;
         }
+        plugin.getEditorSounds().cycle(player);
         player.sendMessage(plugin.getConfigManager().message("messages.editor-saved"));
-        open(player);
+        openSilently(player);
     }
 
     private void reloadPluginSettings() {

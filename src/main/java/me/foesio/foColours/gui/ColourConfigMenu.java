@@ -49,6 +49,17 @@ public final class ColourConfigMenu {
     }
 
     public void open(Player player) {
+        open(player, true);
+    }
+
+    void openSilently(Player player) {
+        open(player, false);
+    }
+
+    private void open(Player player, boolean playOpenSound) {
+        if (playOpenSound) {
+            plugin.getEditorSounds().open(player);
+        }
         EntryBrowserMenus.open(player, request());
     }
 
@@ -61,11 +72,23 @@ public final class ColourConfigMenu {
         switch (click.action()) {
             case ENTRY -> handleColourClick(player, click.entryId(), click.clickType(), event.getCursor(), holder.request().page());
             case ADD -> openAddCustomColourInput(player, holder.request().page(), holder.request().filter());
-            case BACK -> new AdminEditorMenu(plugin).open(player);
+            case BACK -> {
+                plugin.getEditorSounds().back(player);
+                new AdminEditorMenu(plugin).openSilently(player);
+            }
             case SEARCH -> openSearchInput(player, holder.request().filter());
-            case CLEAR_SEARCH -> new ColourConfigMenu(plugin, 0, "").open(player);
-            case PREVIOUS_PAGE -> new ColourConfigMenu(plugin, holder.request().page() - 1, holder.request().filter()).open(player);
-            case NEXT_PAGE -> new ColourConfigMenu(plugin, holder.request().page() + 1, holder.request().filter()).open(player);
+            case CLEAR_SEARCH -> {
+                plugin.getEditorSounds().clearSearch(player);
+                new ColourConfigMenu(plugin, 0, "").openSilently(player);
+            }
+            case PREVIOUS_PAGE -> {
+                plugin.getEditorSounds().previousPage(player);
+                new ColourConfigMenu(plugin, holder.request().page() - 1, holder.request().filter()).openSilently(player);
+            }
+            case NEXT_PAGE -> {
+                plugin.getEditorSounds().nextPage(player);
+                new ColourConfigMenu(plugin, holder.request().page() + 1, holder.request().filter()).openSilently(player);
+            }
             case EXTRA, NONE -> {
             }
         }
@@ -126,20 +149,23 @@ public final class ColourConfigMenu {
     private void handleColourClick(Player player, String key, ClickType clickType, ItemStack cursor, int returnPage) {
         ChatColorDefinition definition = plugin.getColorRegistry().getColour(key).orElse(null);
         if (definition == null) {
-            new ColourConfigMenu(plugin, returnPage, filter).open(player);
+            plugin.getEditorSounds().error(player);
+            new ColourConfigMenu(plugin, returnPage, filter).openSilently(player);
             return;
         }
 
         if (definition.isCustom() && cursor != null && cursor.getType() != Material.AIR) {
             plugin.getConfigManager().set("colours.custom." + definition.getKey() + ".material", cursor.getType().name());
             if (!reloadOrNotify(player)) {
+                plugin.getEditorSounds().addItemError(player);
                 return;
             }
+            plugin.getEditorSounds().addItem(player);
             player.sendMessage(plugin.getConfigManager().message("messages.custom-colour-item-updated", Map.of(
                     "colour", definition.getDisplayName(),
                     "item", cursor.getType().name()
             )));
-            new ColourConfigMenu(plugin, returnPage, filter).open(player);
+            new ColourConfigMenu(plugin, returnPage, filter).openSilently(player);
             return;
         }
 
@@ -156,10 +182,12 @@ public final class ColourConfigMenu {
 
             plugin.getConfigManager().set("player-data.default-colour", definition.getKey());
             if (!reloadOrNotify(player)) {
+                plugin.getEditorSounds().error(player);
                 return;
             }
+            plugin.getEditorSounds().cycle(player);
             player.sendMessage(plugin.getConfigManager().message("messages.default-colour-set", Map.of("colour", definition.getDisplayName())));
-            new ColourConfigMenu(plugin, returnPage, filter).open(player);
+            new ColourConfigMenu(plugin, returnPage, filter).openSilently(player);
             return;
         }
 
@@ -181,13 +209,16 @@ public final class ColourConfigMenu {
         String path = (definition.isCustom() ? "colours.custom." : "colours.built-in.") + definition.getKey() + ".enabled";
         plugin.getConfigManager().set(path, !definition.isEnabled());
         if (!reloadOrNotify(player)) {
+            plugin.getEditorSounds().error(player);
             return;
         }
+        plugin.getEditorSounds().toggle(player, !definition.isEnabled());
         player.sendMessage(plugin.getConfigManager().message("messages.editor-saved"));
-        new ColourConfigMenu(plugin, returnPage, filter).open(player);
+        new ColourConfigMenu(plugin, returnPage, filter).openSilently(player);
     }
 
     private void openSearchInput(Player player, String currentFilter) {
+        plugin.getEditorSounds().search(player);
         TextDialogRequest request = new TextDialogRequest(
                 "Search",
                 List.of("Search colour names, keys, or previews."),
@@ -207,8 +238,8 @@ public final class ColourConfigMenu {
                 player,
                 request,
                 input -> true,
-                input -> new ColourConfigMenu(plugin, 0, input).open(player),
-                () -> new ColourConfigMenu(plugin, page, currentFilter).open(player)
+                input -> new ColourConfigMenu(plugin, 0, input).openSilently(player),
+                () -> new ColourConfigMenu(plugin, page, currentFilter).openSilently(player)
         );
     }
 
@@ -237,13 +268,15 @@ public final class ColourConfigMenu {
                 input -> {
                     plugin.getConfigManager().set("colours.custom." + definition.getKey() + ".display-name", input);
                     if (!reloadOrNotify(player)) {
+                        plugin.getEditorSounds().error(player);
                         return;
                     }
+                    plugin.getSounds().play(player, "colour.rename");
                     player.sendMessage(plugin.getConfigManager().message("messages.custom-colour-renamed", Map.of(
                             "colour", input
                     )));
                 },
-                () -> new ColourConfigMenu(plugin, activePage, filter).open(player)
+                () -> new ColourConfigMenu(plugin, activePage, filter).openSilently(player)
         );
     }
 
@@ -280,14 +313,16 @@ public final class ColourConfigMenu {
                     plugin.getConfigManager().set("colours.custom." + key + ".material", plugin.getConfigManager().getConfig().getString("editor.default-custom-material", "NAME_TAG"));
                     plugin.getConfigManager().set("colours.custom." + key + ".aliases", List.of(key));
                     if (!reloadOrNotify(player)) {
+                        plugin.getEditorSounds().error(player);
                         return;
                     }
+                    plugin.getEditorSounds().add(player);
                     player.sendMessage(plugin.getConfigManager().message("messages.custom-colour-added", plugin.getChatColorService().basePlaceholders(
                             "colour", displayName,
                             "value", colourValue.visibleValue()
                     )));
                 },
-                () -> new ColourConfigMenu(plugin, activePage, activeFilter).open(player)
+                () -> new ColourConfigMenu(plugin, activePage, activeFilter).openSilently(player)
         );
     }
 
