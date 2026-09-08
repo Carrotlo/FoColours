@@ -46,18 +46,22 @@ gui:
   player-menu:
     # Inventory rows. Valid range: 1-6.
     rows: 6
-    title: "&8FoColours"
+    title: "&8ꜰᴏᴄᴏʟᴏᴜʀꜱ"
     locked-material: BARRIER
     items:
       colour-unlocked:
         amount: 1
         custom-model-data: null
         glow: false
-        name: "{theme}{colour}"
+        name: "{theme}&l{colour}"
         lore:
-          - "{white}Preview: {preview}"
-          - "{white}Status: {status}"
-          - "{white}Click to use this colour."
+          - "&8ʙᴜᴛᴛᴏɴ"
+          - " "
+          - "&eⓘ Information ↓"
+          - "&7&l | &fPreview: {preview}"
+          - "&7&l | &fStatus: {status}"
+          - " "
+          - "{good}→ Click to Use Colour ←"
       colour-locked:
         amount: 1
         custom-model-data: null
@@ -72,10 +76,15 @@ gui:
         amount: 1
         custom-model-data: null
         glow: false
-        name: "{theme}Reset Colour"
+        name: ":feather: {theme}&lRESET COLOUR"
         lore:
-          - "{white}Return to {theme}{default_colour}{white}."
-          - "{white}Current: {theme}{current_colour}"
+          - "&8ʙᴜᴛᴛᴏɴ"
+          - " "
+          - "&eⓘ Information ↓"
+          - "&7&l | &fReturn to {theme}{default_colour}&f."
+          - "&7&l | &fCurrent: {theme}{current_colour}"
+          - " "
+          - "{good}→ Click to Reset Colour ←"
       info:
         slot: 50
         material: BOOK

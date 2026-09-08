@@ -78,6 +78,7 @@ public final class FoColours extends JavaPlugin {
         this.messages = FoMessageService.load(this, messageMigrations());
         this.configManager.setMessages(messages);
         refreshCoreContext();
+        migrateSprites();
         this.colorRegistry = new ColorRegistry(configManager);
         this.playerDataManager = new PlayerDataManager(this, configManager);
         this.ezColorsCompatService = new EzColorsCompatService(configManager, colorRegistry, playerDataManager);
@@ -174,7 +175,7 @@ public final class FoColours extends JavaPlugin {
                 input -> {
                     if (input.length() > request.maxLength() || !validator.test(input)) {
                         editorSounds.error(player);
-                        player.sendMessage(configManager.message("messages.prompt-invalid"));
+                        player.sendMessage(configManager.messageForViewer(player, "messages.prompt-invalid", Map.of()));
                         openEditorTextInput(player, request, validator, onAccept, reopenAction);
                         return;
                     }
@@ -183,7 +184,7 @@ public final class FoColours extends JavaPlugin {
                     reopenAction.run();
                 },
                 () -> {
-                    player.sendMessage(configManager.message("messages.prompt-cancelled"));
+                    player.sendMessage(configManager.messageForViewer(player, "messages.prompt-cancelled", Map.of()));
                     editorSounds.back(player);
                     reopenAction.run();
                 }
@@ -316,13 +317,13 @@ public final class FoColours extends JavaPlugin {
     private void warnNativeDialogFallback(Player player) {
         NativeDialogSupport nativeDialogs = core.nativeDialogs();
         if (!nativeDialogs.configEnabled()
-                || nativeDialogs.canUseNativeDialogs()
+                || nativeDialogs.canUseNativeDialogs(player)
                 || !nativeDialogs.warnOnFallback()
                 || !nativeDialogFallbackWarnedPlayers.add(player.getUniqueId())) {
             return;
         }
 
-        player.sendMessage(configManager.message("messages.native-dialog-fallback"));
+        player.sendMessage(configManager.messageForViewer(player, "messages.native-dialog-fallback", Map.of()));
     }
 
     private FoMessageMigrations messageMigrations() {
@@ -339,6 +340,21 @@ public final class FoColours extends JavaPlugin {
                 .remove("messages.prompts.edit-player-title")
                 .remove("messages.prompts.edit-admin-title")
                 .build();
+    }
+
+    private void migrateSprites() {
+        messages.migrateToVersion(core.migrations(), 1, config -> {
+            boolean changed = false;
+            changed |= FoMessageService.addMissingToken(config, "tokens.prefix", ":name_tag: ", null);
+            changed |= FoMessageService.addMissingToken(config, "messages.reload-complete", ":emerald:");
+            changed |= FoMessageService.addMissingToken(config, "messages.reload-failed", ":redstone:");
+            changed |= FoMessageService.addMissingToken(config, "messages.select-success", ":name_tag:");
+            changed |= FoMessageService.addMissingToken(config, "messages.reset-success", ":paper:");
+            changed |= FoMessageService.addMissingToken(config, "messages.custom-colour-added", ":emerald:");
+            changed |= FoMessageService.addMissingToken(config, "messages.custom-colour-removed", ":lava_bucket:");
+            changed |= FoMessageService.addMissingToken(config, "messages.editor-saved", ":emerald:");
+            return true;
+        });
     }
 
     private boolean migrateLegacyTextConfigToMessages(FileConfiguration messageConfig) {

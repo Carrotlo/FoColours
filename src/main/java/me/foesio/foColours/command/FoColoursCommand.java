@@ -45,7 +45,8 @@ public final class FoColoursCommand implements CommandExecutor, TabCompleter {
             if (plugin.getConfigManager().isPlayerGuiEnabled()) {
                 new PlayerColorMenu(plugin).open(player);
             } else {
-                player.sendMessage(String.join("\n", plugin.getConfigManager().messageList("messages.player-help", service.commandContext(player))));
+                player.sendMessage(String.join("\n", plugin.getConfigManager().messageListForViewer(player,
+                        "messages.player-help", service.commandContext(player))));
             }
             return true;
         }
@@ -54,38 +55,42 @@ public final class FoColoursCommand implements CommandExecutor, TabCompleter {
         if (input.equalsIgnoreCase("reset")) {
             if (service.isDefaultSelected(player)) {
                 plugin.getAdminSounds().updateError(player);
-                player.sendMessage(plugin.getConfigManager().message("messages.already-default", service.commandContext(player)));
+                player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.already-default", service.commandContext(player)));
                 return true;
             }
 
             service.resetColour(player);
             plugin.getSounds().play(player, "player.reset");
-            player.sendMessage(plugin.getConfigManager().message("messages.reset-success", service.commandContext(player)));
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.reset-success", service.commandContext(player)));
             return true;
         }
 
         Optional<ChatColorDefinition> definition = compatService.findCompatibleColour(input);
         if (definition.isEmpty()) {
             plugin.getAdminSounds().updateError(player);
-            player.sendMessage(plugin.getConfigManager().message("messages.unknown-colour", service.commandContext(player, "colour", input)));
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.unknown-colour",
+                    service.commandContext(player, "colour", input)));
             return true;
         }
 
         if (!service.hasUnlocked(player, definition.get().getKey())) {
             plugin.getAdminSounds().updateError(player);
-            player.sendMessage(plugin.getConfigManager().message("messages.not-unlocked", service.commandContext(player, "colour", definition.get().getDisplayName())));
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.not-unlocked",
+                    service.commandContext(player, "colour", definition.get().getDisplayName())));
             return true;
         }
 
         if (service.isSelected(player, definition.get().getKey())) {
             plugin.getAdminSounds().updateError(player);
-            player.sendMessage(plugin.getConfigManager().message("messages.already-selected", service.commandContext(player, "colour", definition.get().getDisplayName())));
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.already-selected",
+                    service.commandContext(player, "colour", definition.get().getDisplayName())));
             return true;
         }
 
         service.selectColour(player, definition.get().getKey());
         plugin.getSounds().playWithPitchVariation(player, "player.select", 0.05f);
-        player.sendMessage(plugin.getConfigManager().message("messages.select-success", service.commandContext(player, "colour", definition.get().getDisplayName())));
+        player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.select-success",
+                service.commandContext(player, "colour", definition.get().getDisplayName())));
         return true;
     }
 

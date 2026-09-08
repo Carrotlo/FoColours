@@ -1,5 +1,6 @@
 package me.foesio.foColours.gui;
 
+import me.foesio.core.dialog.DialogIcons;
 import me.foesio.core.gui.GuiItems;
 import me.foesio.foColours.FoColours;
 import org.bukkit.Bukkit;
@@ -37,6 +38,12 @@ public abstract class BaseMenu implements InventoryHolder {
     private void open(Player player, boolean playOpenSound) {
         inventory = Bukkit.createInventory(this, size, title);
         draw(player);
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item != null) {
+                inventory.setItem(slot, DialogIcons.forViewer(player, item));
+            }
+        }
         if (playOpenSound) {
             openSound(player);
         }

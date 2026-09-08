@@ -9,6 +9,7 @@ import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
@@ -21,6 +22,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import me.foesio.core.gui.GuiTitles;
 import java.util.Objects;
 import java.util.Set;
 
@@ -184,6 +186,18 @@ public final class ConfigManager {
         return formatText(raw, placeholders);
     }
 
+    /**
+     * Renders configurable GUI text for a specific viewer while preserving
+     * sprite tokens until FoPluginCore can resolve them for that player.
+     */
+    public String messageForViewer(Player viewer, String path, Map<String, String> placeholders) {
+        Objects.requireNonNull(viewer, "viewer");
+        String raw = isMessagesPath(path)
+                ? messages().config().getString(toMessagePath(path), "")
+                : textString(path, "");
+        return messages().renderTemplateForViewer(viewer, raw, placeholders);
+    }
+
     public List<String> messageList(String path, Map<String, String> placeholders) {
         if (isMessagesPath(path)) {
             return messages().renderList(toMessagePath(path), List.of(""), placeholders);
@@ -196,8 +210,18 @@ public final class ConfigManager {
         return formatted;
     }
 
+    public List<String> messageListForViewer(Player viewer, String path, Map<String, String> placeholders) {
+        Objects.requireNonNull(viewer, "viewer");
+        List<String> raw = isMessagesPath(path)
+                ? messages().config().getStringList(toMessagePath(path))
+                : textList(path);
+        return raw.stream()
+                .map(line -> messages().renderTemplateForViewer(viewer, line, placeholders))
+                .toList();
+    }
+
     public String title(String path) {
-        return TextUtil.toSmallCapsPreservingColors(formatText(textString(path, "&8FoColours"), Map.of()));
+        return GuiTitles.format(formatText(textString(path, "&8ꜰᴏᴄᴏʟᴏᴜʀꜱ"), Map.of()));
     }
 
     public void set(String path, Object value) {

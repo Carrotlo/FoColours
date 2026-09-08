@@ -81,7 +81,7 @@ public final class FoColoursAdminCommand {
     }
 
     private boolean version(FoAdminCommandContext context) {
-        plugin.getUpdateNotices().sendVersion(context.sender());
+        plugin.getUpdateNotices().checkAndSendVersion(context.sender());
         return true;
     }
 

@@ -60,7 +60,7 @@ public final class ColourConfigMenu {
         if (playOpenSound) {
             plugin.getEditorSounds().open(player);
         }
-        EntryBrowserMenus.open(player, request());
+        EntryBrowserMenus.open(player, request(player));
     }
 
     void handleEntryBrowserClick(InventoryClickEvent event, EntryBrowserHolder holder) {
@@ -94,9 +94,9 @@ public final class ColourConfigMenu {
         }
     }
 
-    private EntryBrowserRequest request() {
+    private EntryBrowserRequest request(Player viewer) {
         List<EntryBrowserRequest.Entry> entries = filteredDefinitions().stream()
-                .map(definition -> EntryBrowserRequest.Entry.of(definition.getKey(), colourItem(definition)))
+                .map(definition -> EntryBrowserRequest.Entry.of(definition.getKey(), colourItem(viewer, definition)))
                 .toList();
         return EntryBrowserRequest.builder()
                 .title(plugin.getConfigManager().title("gui.colour-config-menu.title"))
@@ -105,10 +105,12 @@ public final class ColourConfigMenu {
                 .filter(filter)
                 .buttons(BUTTONS)
                 .showBack(true)
-                .addButton(GuiItems.create(
+                .addButton(GuiItems.create(viewer,
                         plugin.getConfigManager().getMaterial("gui.colour-config-menu.items.add-custom.material", Material.ANVIL),
-                        plugin.getConfigManager().message("gui.colour-config-menu.items.add-custom.name"),
-                        plugin.getConfigManager().messageList("gui.colour-config-menu.items.add-custom.lore", Map.of())
+                        plugin.getConfigManager().messageForViewer(viewer,
+                                "gui.colour-config-menu.items.add-custom.name", Map.of()),
+                        plugin.getConfigManager().messageListForViewer(viewer,
+                                "gui.colour-config-menu.items.add-custom.lore", Map.of())
                 ))
                 .context(new ColourBrowserContext())
                 .build();
@@ -124,25 +126,29 @@ public final class ColourConfigMenu {
                 .toList();
     }
 
-    private ItemStack colourItem(ChatColorDefinition definition) {
+    private ItemStack colourItem(Player viewer, ChatColorDefinition definition) {
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put("colour", definition.getDisplayName());
         placeholders.put("preview", definition.getPreviewLabel(plugin.getConfigManager()));
         placeholders.put("status", definition.isEnabled()
-                ? plugin.getConfigManager().message("gui.states.enabled")
-                : plugin.getConfigManager().message("gui.states.disabled"));
+                ? plugin.getConfigManager().messageForViewer(viewer, "gui.states.enabled", Map.of())
+                : plugin.getConfigManager().messageForViewer(viewer, "gui.states.disabled", Map.of()));
         placeholders.put("default_state", definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey())
-                ? plugin.getConfigManager().message("gui.states.yes")
-                : plugin.getConfigManager().message("gui.states.no"));
+                ? plugin.getConfigManager().messageForViewer(viewer, "gui.states.yes", Map.of())
+                : plugin.getConfigManager().messageForViewer(viewer, "gui.states.no", Map.of()));
         placeholders.put("custom_state", definition.isCustom()
-                ? plugin.getConfigManager().message("gui.states.custom")
-                : plugin.getConfigManager().message("gui.states.built-in"));
+                ? plugin.getConfigManager().messageForViewer(viewer, "gui.states.custom", Map.of())
+                : plugin.getConfigManager().messageForViewer(viewer, "gui.states.built-in", Map.of()));
 
-        return GuiItems.create(
+        return GuiItems.create(viewer,
                 definition.getMaterial(),
-                plugin.getConfigManager().message("gui.colour-config-menu.items.colour.name", placeholders),
-                plugin.getConfigManager().messageList("gui.colour-config-menu.items.colour.lore", placeholders),
-                definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey())
+                plugin.getConfigManager().messageForViewer(viewer,
+                        "gui.colour-config-menu.items.colour.name", placeholders),
+                plugin.getConfigManager().messageListForViewer(viewer,
+                        "gui.colour-config-menu.items.colour.lore", placeholders),
+                definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey()),
+                1,
+                null
         );
     }
 
@@ -161,7 +167,7 @@ public final class ColourConfigMenu {
                 return;
             }
             plugin.getEditorSounds().addItem(player);
-            player.sendMessage(plugin.getConfigManager().message("messages.custom-colour-item-updated", Map.of(
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.custom-colour-item-updated", Map.of(
                     "colour", definition.getDisplayName(),
                     "item", cursor.getType().name()
             )));
@@ -176,7 +182,7 @@ public final class ColourConfigMenu {
 
         if (clickType == ClickType.SHIFT_LEFT) {
             if (!definition.isEnabled()) {
-                player.sendMessage(plugin.getConfigManager().message("messages.colour-must-be-enabled-first"));
+                player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.colour-must-be-enabled-first", Map.of()));
                 return;
             }
 
@@ -186,14 +192,15 @@ public final class ColourConfigMenu {
                 return;
             }
             plugin.getEditorSounds().cycle(player);
-            player.sendMessage(plugin.getConfigManager().message("messages.default-colour-set", Map.of("colour", definition.getDisplayName())));
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.default-colour-set",
+                    Map.of("colour", definition.getDisplayName())));
             new ColourConfigMenu(plugin, returnPage, filter).openSilently(player);
             return;
         }
 
         if (clickType == ClickType.RIGHT && definition.isCustom()) {
             if (definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey())) {
-                player.sendMessage(plugin.getConfigManager().message("messages.cannot-remove-default-custom"));
+                player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.cannot-remove-default-custom", Map.of()));
                 return;
             }
 
@@ -202,7 +209,7 @@ public final class ColourConfigMenu {
         }
 
         if (definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey())) {
-            player.sendMessage(plugin.getConfigManager().message("messages.cannot-disable-default"));
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.cannot-disable-default", Map.of()));
             return;
         }
 
@@ -213,7 +220,7 @@ public final class ColourConfigMenu {
             return;
         }
         plugin.getEditorSounds().toggle(player, !definition.isEnabled());
-        player.sendMessage(plugin.getConfigManager().message("messages.editor-saved"));
+        player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.editor-saved", Map.of()));
         new ColourConfigMenu(plugin, returnPage, filter).openSilently(player);
     }
 
@@ -272,7 +279,7 @@ public final class ColourConfigMenu {
                         return;
                     }
                     plugin.getSounds().play(player, "colour.rename");
-                    player.sendMessage(plugin.getConfigManager().message("messages.custom-colour-renamed", Map.of(
+                    player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.custom-colour-renamed", Map.of(
                             "colour", input
                     )));
                 },
@@ -317,7 +324,7 @@ public final class ColourConfigMenu {
                         return;
                     }
                     plugin.getEditorSounds().add(player);
-                    player.sendMessage(plugin.getConfigManager().message("messages.custom-colour-added", plugin.getChatColorService().basePlaceholders(
+                    player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.custom-colour-added", plugin.getChatColorService().basePlaceholders(
                             "colour", displayName,
                             "value", colourValue.visibleValue()
                     )));

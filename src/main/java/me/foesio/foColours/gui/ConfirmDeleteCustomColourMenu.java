@@ -2,6 +2,7 @@ package me.foesio.foColours.gui;
 
 import me.foesio.core.editor.EditorItemFactory;
 import me.foesio.core.reload.FoReloadResult;
+import me.foesio.core.gui.GuiButtons;
 import me.foesio.core.gui.GuiItems;
 import me.foesio.foColours.FoColours;
 import org.bukkit.Material;
@@ -41,12 +42,14 @@ public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
     @Override
     protected void draw(Player viewer) {
         fill(plugin.getConfigManager().getMaterial("gui.shared.filler-material", Material.GRAY_STAINED_GLASS_PANE));
-        setItem(CONFIRM_SLOT, GuiItems.create(
+        setItem(CONFIRM_SLOT, GuiItems.create(viewer,
                 Material.LAVA_BUCKET,
-                plugin.getConfigManager().message("gui.confirm-delete-colour.items.confirm.name", placeholders()),
-                plugin.getConfigManager().messageList("gui.confirm-delete-colour.items.confirm.lore", placeholders())
+                plugin.getConfigManager().messageForViewer(viewer,
+                        "gui.confirm-delete-colour.items.confirm.name", placeholders()),
+                plugin.getConfigManager().messageListForViewer(viewer,
+                        "gui.confirm-delete-colour.items.confirm.lore", placeholders())
         ));
-        setItem(CANCEL_SLOT, EditorItemFactory.back());
+        setItem(CANCEL_SLOT, GuiButtons.back(viewer));
     }
 
     @Override
@@ -64,7 +67,7 @@ public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
                 return;
             }
             plugin.getEditorSounds().delete(player);
-            player.sendMessage(plugin.getConfigManager().message("messages.custom-colour-removed", placeholders()));
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.custom-colour-removed", placeholders()));
             new ColourConfigMenu(plugin, returnPage, returnFilter).openSilently(player);
             return;
         }

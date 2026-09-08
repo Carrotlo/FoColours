@@ -1,5 +1,6 @@
 package me.foesio.foColours.gui;
 
+import me.foesio.core.dialog.DialogIcons;
 import me.foesio.core.gui.GuiButtonConfig;
 import me.foesio.core.gui.GuiItems;
 import me.foesio.core.gui.GuiSlots;
@@ -64,8 +65,8 @@ public final class PlayerColorMenu extends BaseMenu {
             placeholders.put("colour", definition.getDisplayName());
             placeholders.put("preview", definition.getPreviewLabel(plugin.getConfigManager()));
             placeholders.put("status", unlocked
-                    ? plugin.getConfigManager().message("gui.states.unlocked")
-                    : plugin.getConfigManager().message("gui.states.locked"));
+                    ? plugin.getConfigManager().messageForViewer(viewer, "gui.states.unlocked", Map.of())
+                    : plugin.getConfigManager().messageForViewer(viewer, "gui.states.locked", Map.of()));
 
             boolean selected = unlocked && service.isSelected(viewer, definition.getKey());
             String lorePath = unlocked ? "gui.player-menu.items.colour-unlocked.lore" : "gui.player-menu.items.colour-locked.lore";
@@ -75,6 +76,7 @@ public final class PlayerColorMenu extends BaseMenu {
                     ? definition.getMaterial()
                     : plugin.getConfigManager().getMaterial("gui.player-menu.locked-material", Material.BARRIER);
             setItem(colourSlots.get(index), guiItem(
+                    viewer,
                     itemPath,
                     material,
                     placeholders,
@@ -82,9 +84,11 @@ public final class PlayerColorMenu extends BaseMenu {
             ));
         }
 
-        drawPageButtons(activePage, maxPage);
-        setItem(resetSlot(inventory.getSize()), guiItem("gui.player-menu.items.reset", Material.FEATHER, service.commandContext(viewer), false));
-        setItem(infoSlot(inventory.getSize()), guiItem("gui.player-menu.items.info", Material.BOOK, service.commandContext(viewer), false, buildInfoLore(viewer)));
+        drawPageButtons(viewer, activePage, maxPage);
+        setItem(resetSlot(inventory.getSize()), guiItem(viewer, "gui.player-menu.items.reset", Material.FEATHER,
+                service.commandContext(viewer), false));
+        setItem(infoSlot(inventory.getSize()), guiItem(viewer, "gui.player-menu.items.info", Material.BOOK,
+                service.commandContext(viewer), false, buildInfoLore(viewer)));
     }
 
     @Override
@@ -114,7 +118,7 @@ public final class PlayerColorMenu extends BaseMenu {
         if (slot == resetSlot(inventorySize)) {
             service.resetColour(player);
             plugin.getSounds().play(player, "player.reset");
-            player.sendMessage(plugin.getConfigManager().message("messages.reset-success", service.commandContext(player)));
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.reset-success", service.commandContext(player)));
             new PlayerColorMenu(plugin, activePage).openSilently(player);
             return;
         }
@@ -128,33 +132,40 @@ public final class PlayerColorMenu extends BaseMenu {
         ChatColorDefinition definition = definitions.get(definitionIndex);
         if (!service.hasUnlocked(player, definition.getKey())) {
             plugin.getSounds().play(player, "player.error");
-            player.sendMessage(plugin.getConfigManager().message("messages.not-unlocked", service.commandContext(player, "colour", definition.getDisplayName())));
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.not-unlocked",
+                    service.commandContext(player, "colour", definition.getDisplayName())));
             return;
         }
 
         if (service.isSelected(player, definition.getKey())) {
             plugin.getSounds().play(player, "player.error");
-            player.sendMessage(plugin.getConfigManager().message("messages.already-selected", service.commandContext(player, "colour", definition.getDisplayName())));
+            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.already-selected",
+                    service.commandContext(player, "colour", definition.getDisplayName())));
             return;
         }
 
         service.selectColour(player, definition.getKey());
         plugin.getSounds().playWithPitchVariation(player, "player.select", 0.05f);
-        player.sendMessage(plugin.getConfigManager().message("messages.select-success", service.commandContext(player, "colour", definition.getDisplayName())));
+        player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.select-success",
+                service.commandContext(player, "colour", definition.getDisplayName())));
         new PlayerColorMenu(plugin, activePage).openSilently(player);
     }
 
     private List<String> buildInfoLore(Player viewer) {
-        List<String> lore = new ArrayList<>(plugin.getConfigManager().messageList("gui.player-menu.items.info.lore", service.commandContext(viewer)));
+        List<String> lore = new ArrayList<>(plugin.getConfigManager().messageListForViewer(
+                viewer, "gui.player-menu.items.info.lore", service.commandContext(viewer)));
         List<ChatColorDefinition> unlocked = service.getUnlockedColours(viewer);
         if (unlocked.isEmpty()) {
-            lore.add(plugin.getConfigManager().message("gui.player-menu.items.info.empty-unlocked"));
+            lore.add(plugin.getConfigManager().messageForViewer(viewer,
+                    "gui.player-menu.items.info.empty-unlocked", Map.of()));
             return lore;
         }
 
-        lore.add(plugin.getConfigManager().message("gui.player-menu.items.info.unlocked-header"));
+        lore.add(plugin.getConfigManager().messageForViewer(viewer,
+                "gui.player-menu.items.info.unlocked-header", Map.of()));
         for (ChatColorDefinition definition : unlocked) {
-            lore.add(plugin.getConfigManager().message("gui.player-menu.items.info.unlocked-entry", Map.of(
+            lore.add(plugin.getConfigManager().messageForViewer(viewer,
+                    "gui.player-menu.items.info.unlocked-entry", Map.of(
                     "colour", definition.getDisplayName()
             )));
         }
@@ -198,25 +209,33 @@ public final class PlayerColorMenu extends BaseMenu {
         ));
     }
 
-    private void drawPageButtons(int activePage, int maxPage) {
+    private void drawPageButtons(Player viewer, int activePage, int maxPage) {
         if (activePage > 0) {
-            setItem(previousPageSlot(inventory.getSize()), BUTTONS.previousPage(activePage - 1, maxPage));
+            setItem(previousPageSlot(inventory.getSize()), BUTTONS.previousPage(viewer, activePage - 1, maxPage));
         }
         if (activePage < maxPage) {
-            setItem(nextPageSlot(inventory.getSize()), BUTTONS.nextPage(activePage + 1, maxPage));
+            setItem(nextPageSlot(inventory.getSize()), BUTTONS.nextPage(viewer, activePage + 1, maxPage));
         }
     }
 
-    private org.bukkit.inventory.ItemStack guiItem(String path, Material fallbackMaterial, Map<String, String> placeholders, boolean forceGlow) {
-        return guiItem(path, fallbackMaterial, placeholders, forceGlow, plugin.getConfigManager().messageList(path + ".lore", placeholders));
+    private org.bukkit.inventory.ItemStack guiItem(Player viewer, String path, Material fallbackMaterial,
+            Map<String, String> placeholders, boolean forceGlow) {
+        return guiItem(viewer, path, fallbackMaterial, placeholders, forceGlow,
+                plugin.getConfigManager().messageListForViewer(viewer, path + ".lore", placeholders));
     }
 
-    private org.bukkit.inventory.ItemStack guiItem(String path, Material fallbackMaterial, Map<String, String> placeholders, boolean forceGlow, List<String> lore) {
+    private org.bukkit.inventory.ItemStack guiItem(Player viewer, String path, Material fallbackMaterial,
+            Map<String, String> placeholders, boolean forceGlow, List<String> lore) {
         int amount = plugin.getConfigManager().getBoundedInt(path + ".amount", 1, 1, 64);
         boolean glow = forceGlow || plugin.getConfigManager().getBoolean(path + ".glow", false);
-        return GuiItems.create(
-                plugin.getConfigManager().getMaterial(path + ".material", fallbackMaterial),
-                plugin.getConfigManager().message(path + ".name", placeholders),
+        Material material = plugin.getConfigManager().getMaterial(path + ".material", fallbackMaterial);
+        String name = plugin.getConfigManager().messageForViewer(viewer, path + ".name", placeholders);
+        if ("gui.player-menu.items.colour-unlocked".equals(path)) {
+            name = DialogIcons.withMaterialIcon(name, material);
+        }
+        return GuiItems.create(viewer,
+                material,
+                name,
                 lore,
                 glow,
                 amount,
