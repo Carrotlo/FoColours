@@ -175,7 +175,7 @@ public final class FoColours extends JavaPlugin {
                 input -> {
                     if (input.length() > request.maxLength() || !validator.test(input)) {
                         editorSounds.error(player);
-                        player.sendMessage(configManager.messageForViewer(player, "messages.prompt-invalid", Map.of()));
+                        configManager.sendMessage(player, "messages.prompt-invalid");
                         openEditorTextInput(player, request, validator, onAccept, reopenAction);
                         return;
                     }
@@ -184,7 +184,7 @@ public final class FoColours extends JavaPlugin {
                     reopenAction.run();
                 },
                 () -> {
-                    player.sendMessage(configManager.messageForViewer(player, "messages.prompt-cancelled", Map.of()));
+                    configManager.sendMessage(player, "messages.prompt-cancelled");
                     editorSounds.back(player);
                     reopenAction.run();
                 }
@@ -229,17 +229,17 @@ public final class FoColours extends JavaPlugin {
 
     public void sendReloadResult(CommandSender sender, FoReloadResult result) {
         if (result.successful()) {
-            sender.sendMessage(configManager.message("messages.reload-complete"));
+            configManager.sendMessage(sender, "messages.reload-complete");
             if (sender instanceof Player player) {
                 adminSounds.reload(player);
             }
             return;
         }
 
-        sender.sendMessage(configManager.message("messages.reload-failed", Map.of(
+        configManager.sendMessage(sender, "messages.reload-failed", Map.of(
                 "step", result.failedStep(),
                 "error", result.errorMessage()
-        )));
+        ));
         if (sender instanceof Player player) {
             adminSounds.reloadError(player);
         }
@@ -323,7 +323,7 @@ public final class FoColours extends JavaPlugin {
             return;
         }
 
-        player.sendMessage(configManager.messageForViewer(player, "messages.native-dialog-fallback", Map.of()));
+        configManager.sendMessage(player, "messages.native-dialog-fallback");
     }
 
     private FoMessageMigrations messageMigrations() {
@@ -345,7 +345,7 @@ public final class FoColours extends JavaPlugin {
     private void migrateSprites() {
         messages.migrateToVersion(core.migrations(), 1, config -> {
             boolean changed = false;
-            changed |= FoMessageService.addMissingToken(config, "tokens.prefix", ":name_tag: ", null);
+            changed |= migratePrefixSprite(config);
             changed |= FoMessageService.addMissingToken(config, "messages.reload-complete", ":emerald:");
             changed |= FoMessageService.addMissingToken(config, "messages.reload-failed", ":redstone:");
             changed |= FoMessageService.addMissingToken(config, "messages.select-success", ":name_tag:");
@@ -355,6 +355,52 @@ public final class FoColours extends JavaPlugin {
             changed |= FoMessageService.addMissingToken(config, "messages.editor-saved", ":emerald:");
             return true;
         });
+        core.migrations().runToVersion(2, configManager::migrateGuiSprites);
+        messages.migrateToVersion(core.migrations(), 3, config -> {
+            boolean changed = replaceMessageToken(config, "tokens.prefix", ":name_tag:", ":orange_dye:");
+            changed |= addPrefixSpriteSpacing(config, "messages.reload-complete", ":emerald:");
+            changed |= addPrefixSpriteSpacing(config, "messages.reload-failed", ":redstone:");
+            changed |= addPrefixSpriteSpacing(config, "messages.select-success", ":name_tag:");
+            changed |= addPrefixSpriteSpacing(config, "messages.reset-success", ":paper:");
+            changed |= addPrefixSpriteSpacing(config, "messages.custom-colour-added", ":emerald:");
+            changed |= addPrefixSpriteSpacing(config, "messages.custom-colour-removed", ":lava_bucket:");
+            changed |= addPrefixSpriteSpacing(config, "messages.editor-saved", ":emerald:");
+            return changed;
+        });
+    }
+
+    private boolean replaceMessageToken(FileConfiguration config, String path, String oldToken, String newToken) {
+        String current = config.getString(path);
+        if (current == null || !current.contains(oldToken)) {
+            return false;
+        }
+
+        config.set(path, current.replace(oldToken, newToken));
+        return true;
+    }
+
+    private boolean migratePrefixSprite(FileConfiguration config) {
+        String current = config.getString("tokens.prefix");
+        if (current == null || current.isBlank() || current.contains(":orange_dye:")) {
+            return false;
+        }
+
+        String updated = current.contains(":name_tag:")
+                ? current.replace(":name_tag:", ":orange_dye:")
+                : ":orange_dye: " + current;
+        config.set("tokens.prefix", updated);
+        return true;
+    }
+
+    private boolean addPrefixSpriteSpacing(FileConfiguration config, String path, String sprite) {
+        String current = config.getString(path);
+        String oldPrefix = "{prefix}" + sprite;
+        if (current == null || !current.contains(oldPrefix)) {
+            return false;
+        }
+
+        config.set(path, current.replace(oldPrefix, "{prefix} " + sprite));
+        return true;
     }
 
     private boolean migrateLegacyTextConfigToMessages(FileConfiguration messageConfig) {

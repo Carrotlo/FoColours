@@ -6,6 +6,7 @@ import me.foesio.core.message.FoMessageService;
 import me.foesio.foColours.FoColours;
 import me.foesio.foColours.util.TextUtil;
 import org.bukkit.Material;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -109,6 +110,29 @@ public final class ConfigManager {
         this.messages = Objects.requireNonNull(messages, "messages");
     }
 
+    public boolean migrateGuiSprites() {
+        FileConfiguration playerMenu = guis.get("player-menu");
+        if (playerMenu == null) {
+            return false;
+        }
+
+        boolean changed = FoMessageService.addMissingToken(
+                playerMenu,
+                "gui.player-menu.items.info.name",
+                ":book:",
+                null
+        );
+        if (!changed) {
+            return true;
+        }
+
+        return saveYaml(
+                playerMenu,
+                ResourceFiles.dataFile(plugin, "guis/player-menu.yml"),
+                "guis/player-menu.yml"
+        );
+    }
+
     public FileConfiguration getMessagesConfig() {
         return messages().config();
     }
@@ -187,6 +211,24 @@ public final class ConfigManager {
     }
 
     /**
+     * Sends a configurable message through FoPluginCore so viewer-aware item
+     * sprites are rendered for players and stripped safely for other senders.
+     */
+    public void sendMessage(CommandSender sender, String path, Map<String, String> placeholders) {
+        if (isMessagesPath(path)) {
+            String messagePath = toMessagePath(path);
+            messages().send(sender, messagePath, FoMessageService.missingMessageFallback(messagePath), placeholders);
+            return;
+        }
+
+        sender.sendMessage(message(path, placeholders));
+    }
+
+    public void sendMessage(CommandSender sender, String path) {
+        sendMessage(sender, path, Map.of());
+    }
+
+    /**
      * Renders configurable GUI text for a specific viewer while preserving
      * sprite tokens until FoPluginCore can resolve them for that player.
      */
@@ -218,6 +260,18 @@ public final class ConfigManager {
         return raw.stream()
                 .map(line -> messages().renderTemplateForViewer(viewer, line, placeholders))
                 .toList();
+    }
+
+    public void sendMessageList(CommandSender sender, String path, Map<String, String> placeholders) {
+        if (isMessagesPath(path)) {
+            String messagePath = toMessagePath(path);
+            messages().sendList(sender, messagePath, List.of(FoMessageService.missingMessageFallback(messagePath)), placeholders);
+            return;
+        }
+
+        for (String line : messageList(path, placeholders)) {
+            sender.sendMessage(line);
+        }
     }
 
     public String title(String path) {
@@ -655,12 +709,14 @@ public final class ConfigManager {
         plugin.saveConfig();
     }
 
-    private void saveYaml(FileConfiguration fileConfiguration, File file, String label) {
+    private boolean saveYaml(FileConfiguration fileConfiguration, File file, String label) {
         preventLineWrapping(fileConfiguration);
         try {
             fileConfiguration.save(file);
+            return true;
         } catch (IOException exception) {
             plugin.logWarning("Could not save " + label + ": " + exception.getMessage());
+            return false;
         }
     }
 

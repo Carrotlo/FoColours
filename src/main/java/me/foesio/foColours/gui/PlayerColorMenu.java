@@ -118,7 +118,7 @@ public final class PlayerColorMenu extends BaseMenu {
         if (slot == resetSlot(inventorySize)) {
             service.resetColour(player);
             plugin.getSounds().play(player, "player.reset");
-            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.reset-success", service.commandContext(player)));
+            plugin.getConfigManager().sendMessage(player, "messages.reset-success", service.commandContext(player));
             new PlayerColorMenu(plugin, activePage).openSilently(player);
             return;
         }
@@ -132,22 +132,22 @@ public final class PlayerColorMenu extends BaseMenu {
         ChatColorDefinition definition = definitions.get(definitionIndex);
         if (!service.hasUnlocked(player, definition.getKey())) {
             plugin.getSounds().play(player, "player.error");
-            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.not-unlocked",
-                    service.commandContext(player, "colour", definition.getDisplayName())));
+            plugin.getConfigManager().sendMessage(player, "messages.not-unlocked",
+                    service.commandContext(player, "colour", definition.getDisplayName()));
             return;
         }
 
         if (service.isSelected(player, definition.getKey())) {
             plugin.getSounds().play(player, "player.error");
-            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.already-selected",
-                    service.commandContext(player, "colour", definition.getDisplayName())));
+            plugin.getConfigManager().sendMessage(player, "messages.already-selected",
+                    service.commandContext(player, "colour", definition.getDisplayName()));
             return;
         }
 
         service.selectColour(player, definition.getKey());
         plugin.getSounds().playWithPitchVariation(player, "player.select", 0.05f);
-        player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.select-success",
-                service.commandContext(player, "colour", definition.getDisplayName())));
+        plugin.getConfigManager().sendMessage(player, "messages.select-success",
+                service.commandContext(player, "colour", definition.getDisplayName()));
         new PlayerColorMenu(plugin, activePage).openSilently(player);
     }
 

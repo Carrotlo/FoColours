@@ -167,10 +167,10 @@ public final class ColourConfigMenu {
                 return;
             }
             plugin.getEditorSounds().addItem(player);
-            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.custom-colour-item-updated", Map.of(
+            plugin.getConfigManager().sendMessage(player, "messages.custom-colour-item-updated", Map.of(
                     "colour", definition.getDisplayName(),
                     "item", cursor.getType().name()
-            )));
+            ));
             new ColourConfigMenu(plugin, returnPage, filter).openSilently(player);
             return;
         }
@@ -182,7 +182,7 @@ public final class ColourConfigMenu {
 
         if (clickType == ClickType.SHIFT_LEFT) {
             if (!definition.isEnabled()) {
-                player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.colour-must-be-enabled-first", Map.of()));
+                plugin.getConfigManager().sendMessage(player, "messages.colour-must-be-enabled-first");
                 return;
             }
 
@@ -192,15 +192,15 @@ public final class ColourConfigMenu {
                 return;
             }
             plugin.getEditorSounds().cycle(player);
-            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.default-colour-set",
-                    Map.of("colour", definition.getDisplayName())));
+            plugin.getConfigManager().sendMessage(player, "messages.default-colour-set",
+                    Map.of("colour", definition.getDisplayName()));
             new ColourConfigMenu(plugin, returnPage, filter).openSilently(player);
             return;
         }
 
         if (clickType == ClickType.RIGHT && definition.isCustom()) {
             if (definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey())) {
-                player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.cannot-remove-default-custom", Map.of()));
+                plugin.getConfigManager().sendMessage(player, "messages.cannot-remove-default-custom");
                 return;
             }
 
@@ -209,7 +209,7 @@ public final class ColourConfigMenu {
         }
 
         if (definition.getKey().equals(plugin.getConfigManager().getDefaultColourKey())) {
-            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.cannot-disable-default", Map.of()));
+            plugin.getConfigManager().sendMessage(player, "messages.cannot-disable-default");
             return;
         }
 
@@ -220,7 +220,7 @@ public final class ColourConfigMenu {
             return;
         }
         plugin.getEditorSounds().toggle(player, !definition.isEnabled());
-        player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.editor-saved", Map.of()));
+        plugin.getConfigManager().sendMessage(player, "messages.editor-saved");
         new ColourConfigMenu(plugin, returnPage, filter).openSilently(player);
     }
 
@@ -279,9 +279,9 @@ public final class ColourConfigMenu {
                         return;
                     }
                     plugin.getSounds().play(player, "colour.rename");
-                    player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.custom-colour-renamed", Map.of(
+                    plugin.getConfigManager().sendMessage(player, "messages.custom-colour-renamed", Map.of(
                             "colour", input
-                    )));
+                    ));
                 },
                 () -> new ColourConfigMenu(plugin, activePage, filter).openSilently(player)
         );
@@ -324,10 +324,10 @@ public final class ColourConfigMenu {
                         return;
                     }
                     plugin.getEditorSounds().add(player);
-                    player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.custom-colour-added", plugin.getChatColorService().basePlaceholders(
+                    plugin.getConfigManager().sendMessage(player, "messages.custom-colour-added", plugin.getChatColorService().basePlaceholders(
                             "colour", displayName,
                             "value", colourValue.visibleValue()
-                    )));
+                    ));
                 },
                 () -> new ColourConfigMenu(plugin, activePage, activeFilter).openSilently(player)
         );

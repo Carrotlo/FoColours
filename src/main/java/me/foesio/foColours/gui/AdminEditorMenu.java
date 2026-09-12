@@ -44,7 +44,7 @@ public final class AdminEditorMenu {
         if (playOpenSound) {
             plugin.getEditorSounds().open(player);
         }
-        editor().open(player);
+        player.openInventory(editor().build(player));
     }
 
     public void handleClick(Player player, EditorMenuHolder holder, int slot) {
@@ -146,14 +146,14 @@ public final class AdminEditorMenu {
         EditorSaveResult result = editor().toggle(button);
         if (!result.successful()) {
             plugin.getEditorSounds().error(player);
-            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.reload-failed", Map.of(
+            plugin.getConfigManager().sendMessage(player, "messages.reload-failed", Map.of(
                     "step", button.configPath(),
                     "error", result.errorMessage()
-            )));
+            ));
             return;
         }
 
-        player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.editor-saved", Map.of()));
+        plugin.getConfigManager().sendMessage(player, "messages.editor-saved");
         plugin.getEditorSounds().toggle(player, nextValue);
         openSilently(player);
     }
@@ -170,7 +170,7 @@ public final class AdminEditorMenu {
             return;
         }
         plugin.getEditorSounds().cycle(player);
-        player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.editor-saved", Map.of()));
+        plugin.getConfigManager().sendMessage(player, "messages.editor-saved");
         openSilently(player);
     }
 

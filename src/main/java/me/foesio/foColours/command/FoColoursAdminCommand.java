@@ -72,11 +72,14 @@ public final class FoColoursAdminCommand {
                 .usage("messages.admin-help", "{prefix} {muted}Use {theme}/focoloursadmin <version|reload|editor|give|take|convertezcolors>{muted}.")
                 .commandMissing("messages.admin-command-missing", "{prefix} {bad}Admin command is missing from plugin.yml: {theme}{command}")
                 .commandFailed("messages.admin-command-failed", "{prefix} {bad}Command failed. {muted}{error}")
+                .reloadSuccess("messages.reload-complete", "{prefix} :emerald: {good}Reloaded {theme}FoColours {muted}from config.yml, messages.yml, and guis/.")
+                .reloadFailed("messages.reload-failed", "{prefix} :redstone: {bad}Reload failed at {theme}{step}{bad}. {muted}{error}")
+                .editorOpened("messages.editor-opened", "{prefix} :book: {theme}Editor opened.")
                 .build();
     }
 
     private boolean sendHelp(FoAdminCommandContext context) {
-        context.sender().sendMessage(String.join("\n", plugin.getConfigManager().messageList("messages.admin-help", service.basePlaceholders())));
+        plugin.getConfigManager().sendMessageList(context.sender(), "messages.admin-help", service.basePlaceholders());
         return true;
     }
 
@@ -99,7 +102,7 @@ public final class FoColoursAdminCommand {
         CommandSender sender = context.sender();
         String mode = context.subArg(0);
         if (mode.isBlank()) {
-            sender.sendMessage(plugin.getConfigManager().message("messages.ezcolors-toggle-usage"));
+            plugin.getConfigManager().sendMessage(sender, "messages.ezcolors-toggle-usage");
             plugin.getAdminSounds().updateError(sender);
             return true;
         }
@@ -108,15 +111,15 @@ public final class FoColoursAdminCommand {
             case "enable", "enabled", "on", "true" -> enableEzColors(sender);
             case "disable", "disabled", "off", "false" -> disableEzColors(sender);
             case "status" -> {
-                sender.sendMessage(plugin.getConfigManager().message("messages.ezcolors-toggle-status", service.basePlaceholders(
+                plugin.getConfigManager().sendMessage(sender, "messages.ezcolors-toggle-status", service.basePlaceholders(
                         "state", compatService.isEnabled()
                                 ? plugin.getConfigManager().message("gui.states.enabled")
                                 : plugin.getConfigManager().message("gui.states.disabled")
-                )));
+                ));
                 yield true;
             }
             default -> {
-                sender.sendMessage(plugin.getConfigManager().message("messages.ezcolors-toggle-usage"));
+                plugin.getConfigManager().sendMessage(sender, "messages.ezcolors-toggle-usage");
                 plugin.getAdminSounds().updateError(sender);
                 yield true;
             }
@@ -132,9 +135,9 @@ public final class FoColoursAdminCommand {
         }
 
         int converted = compatService.syncAllOnlinePlayers();
-        sender.sendMessage(plugin.getConfigManager().message("messages.ezcolors-toggle-enabled", service.basePlaceholders(
+        plugin.getConfigManager().sendMessage(sender, "messages.ezcolors-toggle-enabled", service.basePlaceholders(
                 "count", Integer.toString(converted)
-        )));
+        ));
         return true;
     }
 
@@ -146,87 +149,87 @@ public final class FoColoursAdminCommand {
             return true;
         }
 
-        sender.sendMessage(plugin.getConfigManager().message("messages.ezcolors-toggle-disabled"));
+        plugin.getConfigManager().sendMessage(sender, "messages.ezcolors-toggle-disabled");
         return true;
     }
 
     private boolean give(FoAdminCommandContext context) {
         if (context.subArgs().length < 2) {
-            context.sender().sendMessage(plugin.getConfigManager().message("messages.admin-usage-give"));
+            plugin.getConfigManager().sendMessage(context.sender(), "messages.admin-usage-give");
             plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         Optional<KnownPlayer> target = plugin.getPlayerDataManager().resolveKnownPlayer(context.subArg(0));
         if (target.isEmpty()) {
-            context.sender().sendMessage(plugin.getConfigManager().message("messages.unknown-player", service.basePlaceholders("player", context.subArg(0))));
+            plugin.getConfigManager().sendMessage(context.sender(), "messages.unknown-player", service.basePlaceholders("player", context.subArg(0)));
             plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         Optional<ChatColorDefinition> colour = compatService.findCompatibleColour(context.subArg(1));
         if (colour.isEmpty()) {
-            context.sender().sendMessage(plugin.getConfigManager().message("messages.unknown-colour", service.basePlaceholders("colour", context.subArg(1))));
+            plugin.getConfigManager().sendMessage(context.sender(), "messages.unknown-colour", service.basePlaceholders("colour", context.subArg(1)));
             plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         if (!service.grantColour(target.get(), colour.get())) {
-            context.sender().sendMessage(plugin.getConfigManager().message("messages.already-unlocked", service.basePlaceholders(
+            plugin.getConfigManager().sendMessage(context.sender(), "messages.already-unlocked", service.basePlaceholders(
                     "player", target.get().name(),
                     "colour", colour.get().getDisplayName()
-            )));
+            ));
             plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
-        context.sender().sendMessage(plugin.getConfigManager().message("messages.admin-give-success", service.basePlaceholders(
+        plugin.getConfigManager().sendMessage(context.sender(), "messages.admin-give-success", service.basePlaceholders(
                 "player", target.get().name(),
                 "colour", colour.get().getDisplayName()
-        )));
+        ));
         return true;
     }
 
     private boolean take(FoAdminCommandContext context) {
         if (context.subArgs().length < 2) {
-            context.sender().sendMessage(plugin.getConfigManager().message("messages.admin-usage-take"));
+            plugin.getConfigManager().sendMessage(context.sender(), "messages.admin-usage-take");
             plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         Optional<KnownPlayer> target = plugin.getPlayerDataManager().resolveKnownPlayer(context.subArg(0));
         if (target.isEmpty()) {
-            context.sender().sendMessage(plugin.getConfigManager().message("messages.unknown-player", service.basePlaceholders("player", context.subArg(0))));
+            plugin.getConfigManager().sendMessage(context.sender(), "messages.unknown-player", service.basePlaceholders("player", context.subArg(0)));
             plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         Optional<ChatColorDefinition> colour = compatService.findCompatibleColour(context.subArg(1));
         if (colour.isEmpty()) {
-            context.sender().sendMessage(plugin.getConfigManager().message("messages.unknown-colour", service.basePlaceholders("colour", context.subArg(1))));
+            plugin.getConfigManager().sendMessage(context.sender(), "messages.unknown-colour", service.basePlaceholders("colour", context.subArg(1)));
             plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         if (colour.get().getKey().equals(plugin.getConfigManager().getDefaultColourKey())) {
-            context.sender().sendMessage(plugin.getConfigManager().message("messages.cannot-take-default"));
+            plugin.getConfigManager().sendMessage(context.sender(), "messages.cannot-take-default");
             plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
         if (!service.takeColour(target.get(), colour.get())) {
-            context.sender().sendMessage(plugin.getConfigManager().message("messages.not-unlocked", service.basePlaceholders(
+            plugin.getConfigManager().sendMessage(context.sender(), "messages.not-unlocked", service.basePlaceholders(
                     "player", target.get().name(),
                     "colour", colour.get().getDisplayName()
-            )));
+            ));
             plugin.getAdminSounds().updateError(context.sender());
             return true;
         }
 
-        context.sender().sendMessage(plugin.getConfigManager().message("messages.admin-take-success", service.basePlaceholders(
+        plugin.getConfigManager().sendMessage(context.sender(), "messages.admin-take-success", service.basePlaceholders(
                 "player", target.get().name(),
                 "colour", colour.get().getDisplayName()
-        )));
+        ));
         return true;
     }
 

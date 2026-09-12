@@ -67,7 +67,7 @@ public final class ConfirmDeleteCustomColourMenu extends BaseMenu {
                 return;
             }
             plugin.getEditorSounds().delete(player);
-            player.sendMessage(plugin.getConfigManager().messageForViewer(player, "messages.custom-colour-removed", placeholders()));
+            plugin.getConfigManager().sendMessage(player, "messages.custom-colour-removed", placeholders());
             new ColourConfigMenu(plugin, returnPage, returnFilter).openSilently(player);
             return;
         }

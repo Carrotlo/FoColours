@@ -91,7 +91,7 @@ gui:
         amount: 1
         custom-model-data: null
         glow: false
-        name: "{theme}Your Colours"
+        name: ":book: {theme}Your Colours"
         lore:
           - "{white}Current: {theme}{current_colour}"
           - "{white}Unlocked colours:"
