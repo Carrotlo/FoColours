@@ -1,22 +1,16 @@
 package me.foesio.foColours.config;
 
 import me.foesio.core.dialog.NativeDialogConfigDefaults;
-import me.foesio.core.config.ResourceFiles;
 import me.foesio.core.message.FoMessageService;
 import me.foesio.foColours.FoColours;
 import me.foesio.foColours.util.TextUtil;
 import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -25,38 +19,20 @@ import java.util.Locale;
 import java.util.Map;
 import me.foesio.core.gui.GuiTitles;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 public final class ConfigManager {
 
-    private static final List<String> DEFAULT_RAINBOW_PALETTE = List.of(
-            "#ff5d73",
-            "#ffbd2e",
-            "#f7f779",
-            "#3ecf8e",
-            "#4dbdff",
-            "#d37cff"
-    );
-    private static final List<Integer> CURRENT_DEFAULT_COLOUR_SLOTS = List.of(
-            10, 11, 12, 13, 14, 15, 16,
-            19, 20, 21, 22, 23, 24, 25,
-            28, 29, 30, 31, 32, 33, 34
-    );
-    private static final List<Integer> OLD_DEFAULT_COLOUR_SLOTS = List.of(
-            10, 11, 12, 13, 14, 15, 16,
-            19, 20, 21, 22, 23, 24, 25,
-            28, 29, 30, 31, 32, 33, 34,
-            37, 38, 39, 40, 41, 42, 43
-    );
-
     private static final int YAML_LINE_WIDTH = 4096;
+    public static final String PUBLIC_GUI_INSTALL_MARKER = ".public-gui-install-pending";
 
     private final FoColours plugin;
-    private final File guisFolder;
+    private boolean freshInstall;
     private volatile FoMessageService messages;
     private volatile FileConfiguration config;
-    private volatile Map<String, FileConfiguration> guis = Map.of();
     private volatile boolean playerGuiEnabled;
+    private volatile boolean resetEnabled;
     private volatile boolean showLockedColours;
     private volatile boolean rainbowAdvanceOnSpaces;
     private volatile ChatMode chatMode;
@@ -71,9 +47,9 @@ public final class ConfigManager {
     private volatile Set<String> defaultUnlockedColours;
     private volatile List<String> rainbowPalette;
 
-    public ConfigManager(FoColours plugin) {
+    public ConfigManager(FoColours plugin, boolean freshInstall) {
         this.plugin = plugin;
-        this.guisFolder = ResourceFiles.dataFile(plugin, "guis");
+        this.freshInstall = freshInstall;
         reload();
     }
 
@@ -81,9 +57,30 @@ public final class ConfigManager {
         plugin.reloadConfig();
         this.config = plugin.getConfig();
         preventLineWrapping(config);
-        loadGuiFiles();
-        ensureConfigDefaults();
+        boolean upgraded = PlayerMenuGuiMigration.installOrUpgrade(plugin,
+                freshInstall || isFreshPublicGuiInstallPending());
+        freshInstall = false;
+        if (upgraded) {
+            plugin.reloadConfig();
+            this.config = plugin.getConfig();
+        }
+        if (upgraded || isPublicGuiMigrationPending()) {
+            ensureConfigDefaults();
+        }
+        loadRuntimeValues();
+    }
+
+    /** Refresh runtime values after owner files are restored, without retrying migration yet. */
+    public void refreshAfterFailedMigration() {
+        plugin.reloadConfig();
+        this.config = plugin.getConfig();
+        preventLineWrapping(config);
+        loadRuntimeValues();
+    }
+
+    private void loadRuntimeValues() {
         this.playerGuiEnabled = config.getBoolean("features.player-gui-enabled", true);
+        this.resetEnabled = config.getBoolean("features.reset-enabled", true);
         this.showLockedColours = config.getBoolean("features.show-locked-colours", true);
         this.rainbowAdvanceOnSpaces = config.getBoolean("rainbow.advance-on-spaces", false);
         this.chatMode = parseChatMode(config.getString("chat.mode", "placeholder"));
@@ -106,31 +103,44 @@ public final class ConfigManager {
         return config;
     }
 
+    public boolean shouldInstallNewResources() {
+        return resourcesNeeded(isPublicGuiMigrationPending(), isFreshPublicGuiInstallPending());
+    }
+
+    static boolean resourcesNeeded(boolean legacyMigrationPending, boolean freshInstallPending) {
+        return legacyMigrationPending || freshInstallPending;
+    }
+
+    public boolean isFreshPublicGuiInstallPending() {
+        return java.nio.file.Files.isRegularFile(new java.io.File(plugin.getDataFolder(),
+                PUBLIC_GUI_INSTALL_MARKER).toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS);
+    }
+
+    public boolean isPublicGuiMigrationPending() {
+        return config.getBoolean(PlayerMenuGuiMigration.PENDING_PATH, false);
+    }
+
+    public void completePublicGuiMigration() {
+        if (!isPublicGuiMigrationPending()) {
+            return;
+        }
+        config.set(PlayerMenuGuiMigration.PENDING_PATH, null);
+        try {
+            PlayerMenuGuiMigration.atomicWrite(new java.io.File(plugin.getDataFolder(), "config.yml").toPath(),
+                    config.saveToString().getBytes(StandardCharsets.UTF_8));
+        } catch (IOException error) {
+            config.set(PlayerMenuGuiMigration.PENDING_PATH, true);
+            throw new IllegalStateException("Could not finish public GUI migration", error);
+        }
+    }
+
     public void setMessages(FoMessageService messages) {
         this.messages = Objects.requireNonNull(messages, "messages");
     }
 
     public boolean migrateGuiSprites() {
-        FileConfiguration playerMenu = guis.get("player-menu");
-        if (playerMenu == null) {
-            return false;
-        }
-
-        boolean changed = FoMessageService.addMissingToken(
-                playerMenu,
-                "gui.player-menu.items.info.name",
-                ":book:",
-                null
-        );
-        if (!changed) {
-            return true;
-        }
-
-        return saveYaml(
-                playerMenu,
-                ResourceFiles.dataFile(plugin, "guis/player-menu.yml"),
-                "guis/player-menu.yml"
-        );
+        // Superseded by the versioned migration into Core's generated GUI.
+        return true;
     }
 
     public FileConfiguration getMessagesConfig() {
@@ -139,6 +149,10 @@ public final class ConfigManager {
 
     public boolean isPlayerGuiEnabled() {
         return playerGuiEnabled;
+    }
+
+    public boolean isResetEnabled() {
+        return resetEnabled;
     }
 
     public boolean isShowLockedColours() {
@@ -210,6 +224,16 @@ public final class ConfigManager {
         return formatText(raw, placeholders);
     }
 
+    public String messageSetting(String path) {
+        return messages().config().getString(path, "");
+    }
+
+    public String formatNumber(int value) {
+        String tag = messageSetting("formats.number-locale");
+        java.util.Locale locale = tag.isBlank() ? java.util.Locale.ROOT : java.util.Locale.forLanguageTag(tag);
+        return java.text.NumberFormat.getIntegerInstance(locale).format(value);
+    }
+
     /**
      * Sends a configurable message through FoPluginCore so viewer-aware item
      * sprites are rendered for players and stripped safely for other senders.
@@ -217,6 +241,10 @@ public final class ConfigManager {
     public void sendMessage(CommandSender sender, String path, Map<String, String> placeholders) {
         if (isMessagesPath(path)) {
             String messagePath = toMessagePath(path);
+            String configured = messages().config().getString(messagePath);
+            if (configured == null || configured.isEmpty()) {
+                return;
+            }
             messages().send(sender, messagePath, FoMessageService.missingMessageFallback(messagePath), placeholders);
             return;
         }
@@ -265,6 +293,9 @@ public final class ConfigManager {
     public void sendMessageList(CommandSender sender, String path, Map<String, String> placeholders) {
         if (isMessagesPath(path)) {
             String messagePath = toMessagePath(path);
+            if (messages().config().getStringList(messagePath).isEmpty()) {
+                return;
+            }
             messages().sendList(sender, messagePath, List.of(FoMessageService.missingMessageFallback(messagePath)), placeholders);
             return;
         }
@@ -299,6 +330,23 @@ public final class ConfigManager {
         } catch (IllegalArgumentException ignored) {
             return fallback;
         }
+    }
+
+    public Optional<Material> readOptionalItemMaterial(String rawMaterial, String path) {
+        if (rawMaterial == null || rawMaterial.isBlank()) {
+            return Optional.empty();
+        }
+        Material material = Material.matchMaterial(rawMaterial);
+        if (material == null || !material.isItem()) {
+            plugin.logWarning("Invalid item material at " + path + ": " + rawMaterial
+                    + ". Using the configured GUI state icon for players.");
+            return Optional.empty();
+        }
+        return Optional.of(material);
+    }
+
+    public void warnInvalidColour(String path, String reason) {
+        plugin.logWarning("Skipping invalid colour at " + path + ": " + reason);
     }
 
     public Material getMaterial(String path, Material fallback) {
@@ -404,15 +452,6 @@ public final class ConfigManager {
         changed |= setDefault("chat.mode", defaultChatMode);
         changed |= ensureNativeDialogDefaults();
         changed |= migrateLegacyRainbowFeatureFlag();
-        changed |= setDefault("rainbow.palette", DEFAULT_RAINBOW_PALETTE);
-        changed |= setDefault("rainbow.advance-on-spaces", false);
-        changed |= setDefault("compatibility.ezcolors.showrainbow-unlocks-rainbow", true);
-        changed |= setDefault("colours.built-in.rainbow.enabled", true);
-        changed |= setDefault("colours.built-in.rainbow.type", "RAINBOW");
-        changed |= setDefault("colours.built-in.rainbow.display-name", "Rainbow");
-        changed |= setDefault("colours.built-in.rainbow.material", "FIREWORK_STAR");
-        changed |= setDefault("colours.built-in.rainbow.aliases", List.of());
-        changed |= removeSection(config, "features.reset-enabled");
         changed |= removeSection(config, "features.chat-hook-enabled");
         changed |= removeSection(config, "features.placeholderapi-enabled");
         changed |= removeSection(config, "gui.admin-menu.items.edit-prefix");
@@ -425,7 +464,6 @@ public final class ConfigManager {
         changed |= removeSection(config, "gui.colour-config-menu.items.info");
         changed |= migrateAddCustomColourButtonConfig();
         changed |= removeSection(config, "updates");
-        changed |= copyMissingResourceValues(config, "config.yml");
         if (changed) {
             saveMainConfig();
         }
@@ -470,9 +508,10 @@ public final class ConfigManager {
         }
 
         boolean legacyEnabled = config.getBoolean(legacyPath, true);
+        boolean rainbowPresent = config.isConfigurationSection("colours.built-in.rainbow");
         boolean rainbowColourEnabled = !config.isSet("colours.built-in.rainbow.enabled")
                 || config.getBoolean("colours.built-in.rainbow.enabled", true);
-        if (!legacyEnabled && rainbowColourEnabled) {
+        if (rainbowPresent && !legacyEnabled && rainbowColourEnabled) {
             config.set("colours.built-in.rainbow.enabled", false);
         }
 
@@ -505,123 +544,6 @@ public final class ConfigManager {
         }
     }
 
-    private void loadGuiFiles() {
-        boolean created = saveDefaultNestedResource("guis/player-menu.yml");
-        File guiFile = ResourceFiles.dataFile(plugin, "guis/player-menu.yml");
-        FileConfiguration playerMenu = loadNestedYaml(guisFolder, "player-menu.yml");
-        boolean changed = copyMissingResourceValues(playerMenu, "guis/player-menu.yml");
-        changed |= migrateOldDefaultColourSlots(playerMenu);
-        if (created) {
-            changed |= migratePublicGuiConfig(playerMenu);
-        }
-        changed |= removeDeprecatedSharedButtonSections(playerMenu);
-        if (changed) {
-            saveYaml(playerMenu, guiFile, "guis/player-menu.yml");
-        }
-        this.guis = Map.of("player-menu", playerMenu);
-    }
-
-    private boolean migrateOldDefaultColourSlots(FileConfiguration playerMenu) {
-        List<Integer> currentSlots = playerMenu.getIntegerList("gui.shared.colour-slots");
-        if (!currentSlots.equals(OLD_DEFAULT_COLOUR_SLOTS)) {
-            return false;
-        }
-
-        playerMenu.set("gui.shared.colour-slots", CURRENT_DEFAULT_COLOUR_SLOTS);
-        return true;
-    }
-
-    private boolean removeDeprecatedSharedButtonSections(FileConfiguration playerMenu) {
-        boolean changed = false;
-        changed |= removeSection(playerMenu, "gui.shared.page-previous");
-        changed |= removeSection(playerMenu, "gui.shared.page-next");
-        changed |= removeSection(playerMenu, "gui.shared.close");
-        changed |= removeSection(playerMenu, "gui.shared.back");
-        return changed;
-    }
-
-    private boolean saveDefaultNestedResource(String resourcePath) {
-        File target = ResourceFiles.dataFile(plugin, resourcePath);
-        boolean created = !target.exists();
-        ResourceFiles.saveDefault(plugin, resourcePath);
-        return created;
-    }
-
-    private FileConfiguration loadNestedYaml(File folder, String fileName) {
-        File file = new File(folder, fileName);
-        YamlConfiguration loaded = YamlConfiguration.loadConfiguration(file);
-        loaded.options().width(YAML_LINE_WIDTH);
-        return loaded;
-    }
-
-    private boolean migratePublicGuiConfig(FileConfiguration playerMenu) {
-        boolean guiChanged = false;
-        guiChanged |= copySectionValues(config, playerMenu, "gui.shared", true);
-        guiChanged |= copySectionValues(config, playerMenu, "gui.states", true);
-        guiChanged |= copySectionValues(config, playerMenu, "gui.player-menu", true);
-
-        boolean configChanged = false;
-        configChanged |= removeSection(config, "gui.shared");
-        configChanged |= removeSection(config, "gui.states");
-        configChanged |= removeSection(config, "gui.player-menu");
-        if (configChanged) {
-            saveMainConfig();
-        }
-        return guiChanged;
-    }
-
-    private boolean copyMissingResourceValues(FileConfiguration target, String resourcePath) {
-        InputStream resource = plugin.getResource(resourcePath);
-        if (resource == null) {
-            plugin.logWarning("Could not find bundled " + resourcePath + " defaults.");
-            return false;
-        }
-
-        try (Reader reader = new InputStreamReader(resource, StandardCharsets.UTF_8)) {
-            YamlConfiguration defaults = YamlConfiguration.loadConfiguration(reader);
-            boolean changed = false;
-            for (String key : defaults.getKeys(true)) {
-                if (defaults.isConfigurationSection(key) || target.isSet(key)) {
-                    continue;
-                }
-
-                target.set(key, defaults.get(key));
-                changed = true;
-            }
-            return changed;
-        } catch (IOException exception) {
-            plugin.logWarning("Could not read bundled " + resourcePath + " defaults: " + exception.getMessage());
-            return false;
-        }
-    }
-
-    private boolean copySectionValues(FileConfiguration source, FileConfiguration target, String rootPath, boolean overwrite) {
-        ConfigurationSection section = source.getConfigurationSection(rootPath);
-        if (section == null) {
-            return false;
-        }
-
-        boolean changed = false;
-        for (String key : section.getKeys(true)) {
-            String path = rootPath + "." + key;
-            if (source.isConfigurationSection(path)) {
-                continue;
-            }
-            if (!overwrite && target.isSet(path)) {
-                continue;
-            }
-
-            Object value = source.get(path);
-            if (Objects.equals(target.get(path), value)) {
-                continue;
-            }
-
-            target.set(path, value);
-            changed = true;
-        }
-        return changed;
-    }
-
     private boolean removeSection(FileConfiguration source, String path) {
         if (!source.isSet(path)) {
             return false;
@@ -640,38 +562,15 @@ public final class ConfigManager {
     }
 
     private String valueString(String path, String fallback) {
-        if (isGuiPath(path)) {
-            FileConfiguration gui = guis.get("player-menu");
-            if (gui != null && gui.isSet(path)) {
-                return gui.getString(path, fallback);
-            }
-        }
         return config.getString(path, fallback);
     }
 
     private List<String> textList(String path) {
-        if (isGuiPath(path)) {
-            FileConfiguration gui = guis.get("player-menu");
-            if (gui != null && gui.isSet(path)) {
-                return gui.getStringList(path);
-            }
-        }
         return config.getStringList(path);
     }
 
     private FileConfiguration configSource(String path) {
-        if (isGuiPath(path)) {
-            FileConfiguration gui = guis.get("player-menu");
-            if (gui != null && gui.isSet(path)) {
-                return gui;
-            }
-        }
         return config;
-    }
-
-    private boolean isGuiPath(String path) {
-        return path.equals("gui")
-                || path.startsWith("gui.");
     }
 
     private boolean isMessagesPath(String path) {
@@ -707,17 +606,6 @@ public final class ConfigManager {
     private void saveMainConfig() {
         preventLineWrapping(config);
         plugin.saveConfig();
-    }
-
-    private boolean saveYaml(FileConfiguration fileConfiguration, File file, String label) {
-        preventLineWrapping(fileConfiguration);
-        try {
-            fileConfiguration.save(file);
-            return true;
-        } catch (IOException exception) {
-            plugin.logWarning("Could not save " + label + ": " + exception.getMessage());
-            return false;
-        }
     }
 
     private void preventLineWrapping(FileConfiguration configuration) {

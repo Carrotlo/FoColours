@@ -15,16 +15,19 @@ public final class ChatColorDefinition {
     private final ColorType type;
     private final String value;
     private final Material material;
+    private final boolean configuredMaterial;
     private final boolean enabled;
     private final boolean custom;
 
-    public ChatColorDefinition(String key, String displayName, List<String> aliases, ColorType type, String value, Material material, boolean enabled, boolean custom) {
+    public ChatColorDefinition(String key, String displayName, List<String> aliases, ColorType type, String value,
+                               Material material, boolean configuredMaterial, boolean enabled, boolean custom) {
         this.key = key;
         this.displayName = displayName;
         this.aliases = List.copyOf(new ArrayList<>(aliases));
         this.type = type;
         this.value = value;
         this.material = material;
+        this.configuredMaterial = configuredMaterial;
         this.enabled = enabled;
         this.custom = custom;
     }
@@ -51,6 +54,10 @@ public final class ChatColorDefinition {
 
     public Material getMaterial() {
         return material;
+    }
+
+    public boolean hasConfiguredMaterial() {
+        return configuredMaterial;
     }
 
     public boolean isEnabled() {

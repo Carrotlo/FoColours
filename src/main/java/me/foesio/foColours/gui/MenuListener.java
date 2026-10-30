@@ -46,15 +46,14 @@ public final class MenuListener implements Listener {
             return;
         }
 
-        if (event.getClickedInventory() == null) {
-            event.setCancelled(true);
-            return;
+        // Keep shift-clicks, hotbar swaps, and other bottom-inventory actions
+        // from moving items into a public menu. Only top-inventory clicks are
+        // dispatched to its control handler.
+        event.setCancelled(true);
+        if (event.getClickedInventory() != null
+                && event.getClickedInventory().equals(event.getView().getTopInventory())) {
+            menu.handleClick(event);
         }
-
-        if (event.getClickedInventory().equals(event.getView().getTopInventory())) {
-            event.setCancelled(true);
-        }
-        menu.handleClick(event);
     }
 
     @EventHandler

@@ -19,12 +19,17 @@ import me.foesio.core.sound.FoGuiSounds;
 import me.foesio.core.sound.FoSoundService;
 import me.foesio.core.update.UpdateNoticeService;
 import me.foesio.foColours.color.ColorRegistry;
+import me.foesio.foColours.api.FoColoursApi;
+import me.foesio.foColours.api.FoColoursApiImpl;
 import me.foesio.foColours.compat.EzColorsCompatService;
 import me.foesio.foColours.command.FoColoursAdminCommand;
 import me.foesio.foColours.command.FoColoursCommand;
 import me.foesio.foColours.config.ConfigManager;
+import me.foesio.foColours.config.PublicTextMigration;
+import me.foesio.foColours.config.PublicGuiUpgradeSnapshot;
 import me.foesio.foColours.data.PlayerDataManager;
 import me.foesio.foColours.gui.MenuListener;
+import me.foesio.foColours.gui.PlayerColorMenu;
 import me.foesio.foColours.listener.ChatListener;
 import me.foesio.foColours.listener.PlayerConnectionListener;
 import me.foesio.foColours.service.ChatColorService;
@@ -32,12 +37,21 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.PluginManager;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashSet;
+import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -59,45 +73,114 @@ public final class FoColours extends JavaPlugin {
     private ColorRegistry colorRegistry;
     private PlayerDataManager playerDataManager;
     private ChatColorService chatColorService;
+    private FoColoursApi api;
     private ChatPromptManager chatPromptManager;
     private EzColorsCompatService ezColorsCompatService;
     private DialogService dialogService;
     private UpdateNoticeService updateNotices;
     private FoSoundService sounds;
+    private PlayerColorMenu playerColorMenu;
     private FoEditorSounds editorSounds;
     private FoGuiSounds guiSounds;
     private FoAdminSounds adminSounds;
     private boolean placeholderHookRegistered;
+    private boolean messagesInstalledThisStart;
     private final Set<UUID> nativeDialogFallbackWarnedPlayers = new HashSet<>();
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
+        boolean freshInstall = !getDataFolder().exists()
+                || getDataFolder().listFiles() == null || getDataFolder().listFiles().length == 0;
+        java.nio.file.Path installMarker = getDataFolder().toPath().resolve(
+                ConfigManager.PUBLIC_GUI_INSTALL_MARKER);
+        PublicGuiUpgradeSnapshot ownerFiles;
+        try {
+            if (freshInstall) {
+                Files.createDirectories(getDataFolder().toPath());
+                Files.writeString(installMarker, "FoColours public GUI first install\n",
+                        java.nio.file.StandardOpenOption.CREATE_NEW);
+            }
+            ownerFiles = PublicGuiUpgradeSnapshot.capture(getDataFolder().toPath());
+        } catch (java.io.IOException error) {
+            throw new IllegalStateException("Could not capture public GUI upgrade files", error);
+        }
+        try {
+            saveDefaultConfig();
 
-        this.configManager = new ConfigManager(this);
-        this.messages = FoMessageService.load(this, messageMigrations());
-        this.configManager.setMessages(messages);
-        refreshCoreContext();
-        migrateSprites();
-        this.colorRegistry = new ColorRegistry(configManager);
-        this.playerDataManager = new PlayerDataManager(this, configManager);
-        this.ezColorsCompatService = new EzColorsCompatService(configManager, colorRegistry, playerDataManager);
-        this.chatColorService = new ChatColorService(configManager, colorRegistry, playerDataManager, ezColorsCompatService);
-        this.chatPromptManager = new ChatPromptManager(this, core.scheduler());
-        refreshDialogService();
+            this.configManager = new ConfigManager(this, freshInstall || Files.isRegularFile(installMarker,
+                    java.nio.file.LinkOption.NOFOLLOW_LINKS));
+            if (configManager.shouldInstallNewResources()) {
+                messagesInstalledThisStart = installNewResource("messages.yml")
+                        || configManager.isPublicGuiMigrationPending() && matchesBundledResource("messages.yml");
+                installNewResource("sounds.yml");
+            }
+            this.messages = FoMessageService.loadPreservingRemovals(this, messageMigrations());
+            messagesInstalledThisStart = false;
+            this.configManager.setMessages(messages);
+            refreshCoreContext();
+            migrateSprites();
+            this.colorRegistry = new ColorRegistry(configManager);
+            this.playerDataManager = new PlayerDataManager(this, configManager);
+            this.ezColorsCompatService = new EzColorsCompatService(configManager, colorRegistry, playerDataManager);
+            this.chatColorService = new ChatColorService(configManager, colorRegistry, playerDataManager, ezColorsCompatService);
+            this.chatPromptManager = new ChatPromptManager(this, core.scheduler());
+            refreshDialogService();
 
-        colorRegistry.reload();
-        playerDataManager.initialize();
-        ezColorsCompatService.syncOnlinePlayersIfConfigured();
+            colorRegistry.reload();
+            playerDataManager.initialize();
+            ezColorsCompatService.syncOnlinePlayersIfConfigured();
+            this.playerColorMenu = new PlayerColorMenu(this);
+            try {
+                finishPendingPublicGuiMigration();
+            } catch (RuntimeException migrationError) {
+                logWarning("Public GUI upgrade could not finish; restoring owner files and leaving the menu unavailable: "
+                        + migrationError.getMessage());
+                try {
+                    ownerFiles.rollback();
+                    configManager.refreshAfterFailedMigration();
+                    // Released installs stored their text in config.yml and had no
+                    // messages.yml to restore. Keep the already migrated in-memory
+                    // text in that case so direct colour commands retain feedback.
+                    if (Files.isRegularFile(getDataFolder().toPath().resolve("messages.yml"))) {
+                        messages = FoMessageService.loadPreservingRemovals(this, FoMessageMigrations.none());
+                        configManager.setMessages(messages);
+                    }
+                    sounds = FoSoundService.loadPreservingRemovals(this);
+                    refreshCoreContext();
+                    colorRegistry.reload();
+                    playerColorMenu.blockForFailedMigration();
+                } catch (java.io.IOException | RuntimeException restoreError) {
+                    migrationError.addSuppressed(restoreError);
+                    throw migrationError;
+                }
+            }
 
-        registerCommands();
-        registerListeners();
-        refreshPlaceholderHook();
+            registerCommands();
+            registerListeners();
+            refreshPlaceholderHook();
+            this.api = new FoColoursApiImpl(this);
+            getServer().getServicesManager().register(FoColoursApi.class, api, this, ServicePriority.Normal);
+        } catch (RuntimeException | Error failure) {
+            try {
+                ownerFiles.rollback();
+            } catch (java.io.IOException rollbackError) {
+                failure.addSuppressed(rollbackError);
+            }
+            throw failure;
+        }
     }
 
     @Override
     public void onDisable() {
+        if (api != null) {
+            getServer().getServicesManager().unregister(FoColoursApi.class, api);
+            api = null;
+        }
         placeholderHookRegistered = false;
+        if (playerColorMenu != null) {
+            playerColorMenu.close();
+            playerColorMenu = null;
+        }
 
         if (playerDataManager != null) {
             playerDataManager.flushAll();
@@ -116,19 +199,93 @@ public final class FoColours extends JavaPlugin {
     }
 
     public FoReloadResult reloadPluginState() {
+        boolean menuWasAvailable = playerColorMenu != null && playerColorMenu.isAvailable();
+        PublicGuiUpgradeSnapshot ownerFiles;
+        try {
+            ownerFiles = PublicGuiUpgradeSnapshot.capture(getDataFolder().toPath());
+        } catch (java.io.IOException error) {
+            return FoReloadResult.failed(java.util.List.of(), "public GUI upgrade snapshot", error);
+        }
+        // Ordinary reloads must reject invalid owner files before changing any
+        // messages, sounds, colours, or the GUI snapshot they are rendered with.
+        // A pending upgrade first needs its versioned file migration.
+        if (!configManager.isPublicGuiMigrationPending()
+                && !configManager.isFreshPublicGuiInstallPending()) {
+            for (String filename : new String[] {"config.yml", "messages.yml"}) {
+                try {
+                    validateOwnerYaml(filename);
+                } catch (RuntimeException error) {
+                    return FoReloadResult.failed(java.util.List.of(), filename, error);
+                }
+            }
+            if (!sounds.validateInstalled()) {
+                return FoReloadResult.failed(java.util.List.of(), "sounds.yml",
+                        new IllegalStateException("Sound validation failed; previous working version remains active"));
+            }
+            if (playerColorMenu != null && !playerColorMenu.validateInstalled().successful()) {
+                return FoReloadResult.failed(java.util.List.of(), "player GUI",
+                        new IllegalStateException("Player GUI validation failed; previous working version remains active"));
+            }
+        }
         FoReloadResult result = FoReloadRegistry.create()
-                .add("config", configManager::reload)
-                .addMessages(messages)
+                .add("config", () -> {
+                    configManager.reload();
+                    if (configManager.shouldInstallNewResources()) {
+                        messagesInstalledThisStart = installNewResource("messages.yml")
+                                || configManager.isPublicGuiMigrationPending() && matchesBundledResource("messages.yml");
+                        installNewResource("sounds.yml");
+                    }
+                })
+                .add("messages", () -> {
+                    validateOwnerYaml("messages.yml");
+                    messages.reload();
+                    messagesInstalledThisStart = false;
+                    migrateSprites();
+                })
                 .add("core", this::refreshCoreContext)
-                .add("sounds", () -> sounds.reload())
+                .add("sounds", () -> {
+                    validateOwnerYaml("sounds.yml");
+                    if (!sounds.reloadChecked()) {
+                        throw new IllegalStateException("sounds.yml validation failed; previous sounds remain active");
+                    }
+                })
                 .add("colours", colorRegistry::reload)
                 .add("player-data", () -> playerDataManager.normalizeOnlineSelections(colorRegistry, configManager.getDefaultColourKey()))
                 .add("ezcolors", ezColorsCompatService::syncOnlinePlayersIfConfigured)
                 .add("placeholders", this::refreshPlaceholderHook)
                 .add("dialogs", this::refreshDialogService)
                 .add("admin commands", this::registerCommands)
+                .add("player GUI", () -> {
+                    if (!playerColorMenu.reload().successful()) {
+                        throw new IllegalStateException("Player GUI validation failed; previous GUI remains active");
+                    }
+                })
+                .add("public GUI migration", this::finishPendingPublicGuiMigration)
                 .reload();
         if (!result.successful()) {
+            try {
+                if (ownerFiles.rollback()) {
+                    configManager.refreshAfterFailedMigration();
+                    colorRegistry.reload();
+                    if (Files.isRegularFile(getDataFolder().toPath().resolve("messages.yml"))) {
+                        messages = FoMessageService.loadPreservingRemovals(this, FoMessageMigrations.none());
+                        configManager.setMessages(messages);
+                    }
+                    sounds = FoSoundService.loadPreservingRemovals(this);
+                    refreshCoreContext();
+                    if (result.completedSteps().contains("player GUI")) {
+                        playerColorMenu.close();
+                        playerColorMenu = new PlayerColorMenu(this);
+                    }
+                }
+            } catch (java.io.IOException | RuntimeException rollbackError) {
+                logWarning("Could not fully restore public GUI owner files after failed reload: "
+                        + rollbackError.getMessage());
+                return FoReloadResult.failed(result.completedSteps(), "public GUI upgrade rollback", rollbackError);
+            }
+            if ("public GUI migration".equals(result.failedStep()) && !menuWasAvailable) {
+                playerColorMenu.blockForFailedMigration();
+            }
             logWarning("Reload failed at " + result.failedStep() + ": " + result.errorMessage());
         }
         return result;
@@ -211,6 +368,10 @@ public final class FoColours extends JavaPlugin {
         return sounds;
     }
 
+    public PlayerColorMenu getPlayerColorMenu() {
+        return playerColorMenu;
+    }
+
     public FoEditorSounds getEditorSounds() {
         return editorSounds;
     }
@@ -253,6 +414,80 @@ public final class FoColours extends JavaPlugin {
         getLogger().warning("[" + getName() + "] " + message);
     }
 
+    private boolean installNewResource(String path) {
+        Path target = getDataFolder().toPath().resolve(path);
+        if (Files.exists(target)) {
+            return false;
+        }
+        try (InputStream bundled = getResource(path)) {
+            if (bundled == null) {
+                throw new IllegalStateException("Missing packaged resource " + path);
+            }
+            Files.createDirectories(target.getParent());
+            Path staged = Files.createTempFile(target.getParent(), ".resource-", ".tmp");
+            try {
+                Files.copy(bundled, staged, StandardCopyOption.REPLACE_EXISTING);
+                try {
+                    Files.move(staged, target, StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.nio.file.AtomicMoveNotSupportedException unavailable) {
+                    Files.move(staged, target);
+                }
+            } finally {
+                Files.deleteIfExists(staged);
+            }
+            return true;
+        } catch (java.io.IOException error) {
+            throw new IllegalStateException("Could not install " + path, error);
+        }
+    }
+
+    private boolean matchesBundledResource(String path) {
+        File installed = new File(getDataFolder(), path);
+        try (InputStream bundled = getResource(path)) {
+            return installed.isFile() && bundled != null
+                    && java.util.Arrays.equals(Files.readAllBytes(installed.toPath()), bundled.readAllBytes());
+        } catch (java.io.IOException error) {
+            logWarning("Could not compare " + path + " during upgrade recovery: " + error.getMessage());
+            return false;
+        }
+    }
+
+    private void finishPendingPublicGuiMigration() {
+        if (!configManager.isPublicGuiMigrationPending()
+                && !configManager.isFreshPublicGuiInstallPending()) {
+            if (playerColorMenu != null) {
+                playerColorMenu.completeMigration();
+            }
+            return;
+        }
+        validateOwnerYaml("messages.yml");
+        validateOwnerYaml("sounds.yml");
+        try {
+            YamlConfiguration savedMessages = new YamlConfiguration();
+            savedMessages.load(new File(getDataFolder(), "messages.yml"));
+            if (!PublicTextMigration.sameValues(messages.config(), savedMessages)) {
+                throw new IllegalStateException("messages.yml was not saved with the migrated public text");
+            }
+        } catch (java.io.IOException | org.bukkit.configuration.InvalidConfigurationException error) {
+            throw new IllegalStateException("Cannot confirm migrated messages.yml on disk", error);
+        }
+        // The first load may have used Core's field-level cold-start fallback.
+        // A pending upgrade may only finish when the installed file itself
+        // passes a strict reload, without in-memory substitutions.
+        if (playerColorMenu == null || !playerColorMenu.reload().successful() || !sounds.reloadChecked()) {
+            throw new IllegalStateException("Public GUI migration remains pending until the installed GUI and sounds load");
+        }
+        configManager.completePublicGuiMigration();
+        try {
+            if (configManager.isFreshPublicGuiInstallPending()) {
+                Files.deleteIfExists(getDataFolder().toPath().resolve(ConfigManager.PUBLIC_GUI_INSTALL_MARKER));
+            }
+        } catch (java.io.IOException error) {
+            throw new IllegalStateException("Could not finish fresh public GUI installation", error);
+        }
+        playerColorMenu.completeMigration();
+    }
+
     private void registerCommands() {
         FoColoursCommand coloursCommand = new FoColoursCommand(this);
 
@@ -276,7 +511,9 @@ public final class FoColours extends JavaPlugin {
         }
 
         this.core = FoPluginCore.create(this);
-        this.sounds = core.createSounds();
+        if (this.sounds == null) {
+            this.sounds = FoSoundService.loadPreservingRemovals(this);
+        }
         this.editorSounds = FoEditorSounds.create(sounds);
         this.guiSounds = FoGuiSounds.create(sounds);
         this.adminSounds = FoAdminSounds.create(sounds);
@@ -285,6 +522,16 @@ public final class FoColours extends JavaPlugin {
             HandlerList.unregisterAll(updateNotices);
         }
         this.updateNotices = core.createUpdateNotices(messages, MODRINTH_PROJECT_ID, adminSounds).start();
+    }
+
+    private void validateOwnerYaml(String filename) {
+        File file = new File(getDataFolder(), filename);
+        YamlConfiguration candidate = new YamlConfiguration();
+        try {
+            candidate.load(file);
+        } catch (Exception error) {
+            throw new IllegalStateException("Cannot load " + filename + ": " + error.getMessage(), error);
+        }
     }
 
     private void refreshDialogService() {
@@ -330,12 +577,10 @@ public final class FoColours extends JavaPlugin {
         return FoMessageMigrations.create()
                 .add(this::migrateLegacyTextConfigToMessages)
                 .add(this::migrateStyleTokensToCoreTokens)
-                .add(this::prefixLegacyMessageTemplates)
                 .add(this::cleanupAddCustomColourPromptText)
                 .remove("messages.prefix")
                 .remove("messages.version")
                 .remove("messages.update-available")
-                .remove("messages.reset-disabled")
                 .remove("messages.prompts.edit-prefix")
                 .remove("messages.prompts.edit-player-title")
                 .remove("messages.prompts.edit-admin-title")
@@ -343,78 +588,35 @@ public final class FoColours extends JavaPlugin {
     }
 
     private void migrateSprites() {
-        messages.migrateToVersion(core.migrations(), 1, config -> {
-            boolean changed = false;
-            changed |= migratePrefixSprite(config);
-            changed |= FoMessageService.addMissingToken(config, "messages.reload-complete", ":emerald:");
-            changed |= FoMessageService.addMissingToken(config, "messages.reload-failed", ":redstone:");
-            changed |= FoMessageService.addMissingToken(config, "messages.select-success", ":name_tag:");
-            changed |= FoMessageService.addMissingToken(config, "messages.reset-success", ":paper:");
-            changed |= FoMessageService.addMissingToken(config, "messages.custom-colour-added", ":emerald:");
-            changed |= FoMessageService.addMissingToken(config, "messages.custom-colour-removed", ":lava_bucket:");
-            changed |= FoMessageService.addMissingToken(config, "messages.editor-saved", ":emerald:");
-            return true;
-        });
+        // Old sprite migrations are retained as version checkpoints. The newest
+        // bundled defaults already contain sprites; custom owner text stays exact.
+        messages.migrateToVersion(core.migrations(), 1, config -> false);
         core.migrations().runToVersion(2, configManager::migrateGuiSprites);
-        messages.migrateToVersion(core.migrations(), 3, config -> {
-            boolean changed = replaceMessageToken(config, "tokens.prefix", ":name_tag:", ":orange_dye:");
-            changed |= addPrefixSpriteSpacing(config, "messages.reload-complete", ":emerald:");
-            changed |= addPrefixSpriteSpacing(config, "messages.reload-failed", ":redstone:");
-            changed |= addPrefixSpriteSpacing(config, "messages.select-success", ":name_tag:");
-            changed |= addPrefixSpriteSpacing(config, "messages.reset-success", ":paper:");
-            changed |= addPrefixSpriteSpacing(config, "messages.custom-colour-added", ":emerald:");
-            changed |= addPrefixSpriteSpacing(config, "messages.custom-colour-removed", ":lava_bucket:");
-            changed |= addPrefixSpriteSpacing(config, "messages.editor-saved", ":emerald:");
-            return changed;
-        });
-    }
-
-    private boolean replaceMessageToken(FileConfiguration config, String path, String oldToken, String newToken) {
-        String current = config.getString(path);
-        if (current == null || !current.contains(oldToken)) {
-            return false;
-        }
-
-        config.set(path, current.replace(oldToken, newToken));
-        return true;
-    }
-
-    private boolean migratePrefixSprite(FileConfiguration config) {
-        String current = config.getString("tokens.prefix");
-        if (current == null || current.isBlank() || current.contains(":orange_dye:")) {
-            return false;
-        }
-
-        String updated = current.contains(":name_tag:")
-                ? current.replace(":name_tag:", ":orange_dye:")
-                : ":orange_dye: " + current;
-        config.set("tokens.prefix", updated);
-        return true;
-    }
-
-    private boolean addPrefixSpriteSpacing(FileConfiguration config, String path, String sprite) {
-        String current = config.getString(path);
-        String oldPrefix = "{prefix}" + sprite;
-        if (current == null || !current.contains(oldPrefix)) {
-            return false;
-        }
-
-        config.set(path, current.replace(oldPrefix, "{prefix} " + sprite));
-        return true;
+        messages.migrateToVersion(core.migrations(), 3, config -> false);
+        // An existing messages.yml is authoritative. Its absent keys may have
+        // been deliberately removed, so version checkpoints cannot add them.
+        messages.migrateToVersion(core.migrations(), 4, config -> false);
+        messages.migrateToVersion(core.migrations(), 5, config -> false);
     }
 
     private boolean migrateLegacyTextConfigToMessages(FileConfiguration messageConfig) {
-        FileConfiguration mainConfig = configManager.getConfig();
-        boolean messagesChanged = copySectionValues(mainConfig, messageConfig, "messages", "messages", true);
-        messagesChanged |= copySectionValues(mainConfig, messageConfig, "style.tokens", "tokens", true);
-
-        boolean configChanged = removeSection(mainConfig, "messages");
-        configChanged |= removeSection(mainConfig, "style");
-        if (configChanged) {
-            saveConfig();
+        if (!messagesInstalledThisStart || !configManager.isPublicGuiMigrationPending()) {
+            return false; // Existing messages.yml is authoritative, including owner-removed keys.
         }
-
-        return messagesChanged;
+        try (InputStream old = getResource("migrations/player-menu-v1.yml");
+             InputStream newest = getResource("messages.yml")) {
+            if (old == null || newest == null) {
+                throw new IllegalStateException("Missing bundled public text migration defaults");
+            }
+            YamlConfiguration released = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(old, StandardCharsets.UTF_8));
+            YamlConfiguration bundled = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(newest, StandardCharsets.UTF_8));
+            return PublicTextMigration.fromReleasedConfig(configManager.getConfig(), released,
+                    messageConfig, bundled, this::logWarning);
+        } catch (java.io.IOException error) {
+            throw new IllegalStateException("Could not read public text migration defaults", error);
+        }
     }
 
     private boolean migrateStyleTokensToCoreTokens(FileConfiguration messageConfig) {
@@ -430,7 +632,7 @@ public final class FoColours extends JavaPlugin {
             }
             String targetPath = "tokens." + key;
             Object value = legacyTokens.get(key);
-            if (!Objects.equals(messageConfig.get(targetPath), value)) {
+            if (!messageConfig.contains(targetPath, false)) {
                 messageConfig.set(targetPath, value);
                 changed = true;
             }
@@ -442,55 +644,6 @@ public final class FoColours extends JavaPlugin {
             messageConfig.set("style", null);
         }
         return true;
-    }
-
-    private boolean prefixLegacyMessageTemplates(FileConfiguration messageConfig) {
-        ConfigurationSection section = messageConfig.getConfigurationSection("messages");
-        if (section == null) {
-            return false;
-        }
-
-        boolean changed = false;
-        for (String key : section.getKeys(true)) {
-            String path = "messages." + key;
-            if (messageConfig.isConfigurationSection(path)) {
-                continue;
-            }
-
-            if (messageConfig.isList(path)) {
-                if (path.equals("messages.prompts.add-custom-colour")) {
-                    continue;
-                }
-                java.util.List<String> current = messageConfig.getStringList(path);
-                java.util.List<String> prefixed = current.stream()
-                        .map(this::prefixLegacyMessageTemplate)
-                        .toList();
-                if (!current.equals(prefixed)) {
-                    messageConfig.set(path, prefixed);
-                    changed = true;
-                }
-                continue;
-            }
-
-            if (!messageConfig.isString(path)) {
-                continue;
-            }
-
-            String current = messageConfig.getString(path, "");
-            String prefixed = prefixLegacyMessageTemplate(current);
-            if (!Objects.equals(current, prefixed)) {
-                messageConfig.set(path, prefixed);
-                changed = true;
-            }
-        }
-        return changed;
-    }
-
-    private String prefixLegacyMessageTemplate(String template) {
-        if (template == null || template.isBlank() || template.contains("{prefix}")) {
-            return template;
-        }
-        return "{prefix} " + template;
     }
 
     private boolean cleanupAddCustomColourPromptText(FileConfiguration messageConfig) {
@@ -544,44 +697,6 @@ public final class FoColours extends JavaPlugin {
                 .replace(VARIATION_SELECTOR_TEXT, "")
                 .replaceAll("##([0-9A-Fa-f]{6})\\{(?:theme|muted|white|good|bad)}\\1", "#$1")
                 .replaceAll("&&([0-9A-Fa-f])\\{(?:theme|muted|white|good|bad)}\\1", "&$1");
-    }
-
-    private boolean copySectionValues(FileConfiguration source, FileConfiguration target, String sourceRoot, String targetRoot, boolean overwrite) {
-        ConfigurationSection section = source.getConfigurationSection(sourceRoot);
-        if (section == null) {
-            return false;
-        }
-
-        boolean changed = false;
-        for (String key : section.getKeys(true)) {
-            String sourcePath = sourceRoot + "." + key;
-            if (source.isConfigurationSection(sourcePath)) {
-                continue;
-            }
-
-            String targetPath = targetRoot + "." + key;
-            if (!overwrite && target.isSet(targetPath)) {
-                continue;
-            }
-
-            Object value = source.get(sourcePath);
-            if (Objects.equals(target.get(targetPath), value)) {
-                continue;
-            }
-
-            target.set(targetPath, value);
-            changed = true;
-        }
-        return changed;
-    }
-
-    private boolean removeSection(FileConfiguration source, String path) {
-        if (!source.isSet(path)) {
-            return false;
-        }
-
-        source.set(path, null);
-        return true;
     }
 
     private void runIfPresent(Runnable runnable) {

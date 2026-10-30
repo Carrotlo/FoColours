@@ -2,6 +2,9 @@ package me.foesio.foColours.data;
 
 import me.foesio.core.config.ResourceFiles;
 import me.foesio.foColours.FoColours;
+import me.foesio.foColours.api.ColourChangeCause;
+import me.foesio.foColours.api.event.PlayerColourAccessChangedEvent;
+import me.foesio.foColours.api.event.PlayerColourSelectionChangedEvent;
 import me.foesio.foColours.color.ColorRegistry;
 import me.foesio.foColours.config.ConfigManager;
 import org.bukkit.Bukkit;
@@ -70,11 +73,13 @@ public final class PlayerDataManager {
         return loadPlayer(player).snapshotUnlockedColours();
     }
 
-    public void saveAndUnload(Player player) {
-        PlayerColorData data = cache.remove(player.getUniqueId());
-        if (data != null) {
+    public synchronized void saveAndUnload(Player player) {
+        PlayerColorData cached = cache.get(player.getUniqueId());
+        if (cached != null) {
+            PlayerColorData data = cached.copy();
             data.setLastKnownName(player.getName());
             save(player.getUniqueId(), data);
+            cache.remove(player.getUniqueId(), cached);
         }
     }
 
@@ -145,17 +150,29 @@ public final class PlayerDataManager {
         return new ArrayList<>(names);
     }
 
-    public boolean grantColour(KnownPlayer knownPlayer, String key) {
-        PlayerColorData data = getOrLoad(knownPlayer);
+    public synchronized boolean grantColour(KnownPlayer knownPlayer, String key) {
+        return grantColour(knownPlayer, key, ColourChangeCause.ADMIN_COMMAND);
+    }
+
+    public synchronized boolean grantColour(KnownPlayer knownPlayer, String key, ColourChangeCause cause) {
+        PlayerColorData data = getOrLoad(knownPlayer).copy();
         boolean changed = data.addUnlocked(key);
         if (changed) {
             save(knownPlayer.uuid(), data);
+            cache.put(knownPlayer.uuid(), data);
+            emitAccess(knownPlayer.uuid(), key, true, cause);
         }
         return changed;
     }
 
-    public boolean takeColour(KnownPlayer knownPlayer, String key, String fallbackKey, boolean hasLivePermissionAccess) {
-        PlayerColorData data = getOrLoad(knownPlayer);
+    public synchronized boolean takeColour(KnownPlayer knownPlayer, String key, String fallbackKey, boolean hasLivePermissionAccess) {
+        return takeColour(knownPlayer, key, fallbackKey, hasLivePermissionAccess, ColourChangeCause.ADMIN_COMMAND);
+    }
+
+    public synchronized boolean takeColour(KnownPlayer knownPlayer, String key, String fallbackKey, boolean hasLivePermissionAccess, ColourChangeCause cause) {
+        PlayerColorData before = getOrLoad(knownPlayer);
+        PlayerColorData data = before.copy();
+        String oldSelected = data.getSelectedColour();
         boolean changed = data.removeUnlocked(key);
         changed |= data.removeLegacyPermissionGrant(key);
         if (changed || hasLivePermissionAccess) {
@@ -172,31 +189,41 @@ public final class PlayerDataManager {
         }
 
         save(knownPlayer.uuid(), data);
+        cache.put(knownPlayer.uuid(), data);
+        emitAccessChanges(knownPlayer.uuid(), before, data, cause);
+        if (before.hasUnlocked(key) == data.hasUnlocked(key)
+                && hasLivePermissionAccess && !before.isRevoked(key)) {
+            emitAccess(knownPlayer.uuid(), key, false, cause);
+        }
+        emitSelection(knownPlayer.uuid(), oldSelected, data.getSelectedColour(), cause);
         return true;
     }
 
-    public boolean setSelectedColour(Player player, String key) {
-        PlayerColorData data = loadPlayer(player);
+    public synchronized boolean setSelectedColour(Player player, String key) {
+        return setSelectedColour(player, key, ColourChangeCause.API);
+    }
+
+    public synchronized boolean setSelectedColour(Player player, String key, ColourChangeCause cause) {
+        PlayerColorData data = loadPlayer(player).copy();
         if (key.equals(data.getSelectedColour())) {
             return false;
         }
 
+        String oldSelected = data.getSelectedColour();
         data.setSelectedColour(key);
         save(player.getUniqueId(), data);
+        cache.put(player.getUniqueId(), data);
+        emitSelection(player.getUniqueId(), oldSelected, key, cause);
         return true;
     }
 
-    public boolean grantColour(Player player, String key) {
-        PlayerColorData data = loadPlayer(player);
-        boolean changed = data.addUnlocked(key);
-        if (changed) {
-            save(player.getUniqueId(), data);
-        }
-        return changed;
+    public synchronized boolean grantColour(Player player, String key) {
+        return grantColour(new KnownPlayer(player.getUniqueId(), player.getName()), key, ColourChangeCause.EZCOLORS_SYNC);
     }
 
-    public me.foesio.foColours.compat.EzColorsCompatService.SyncResult syncLegacyPermissionGrants(Player player, Collection<String> permissionGrants, boolean revokeMissing, String fallbackKey, boolean markConverted) {
-        PlayerColorData data = loadPlayer(player);
+    public synchronized me.foesio.foColours.compat.EzColorsCompatService.SyncResult syncLegacyPermissionGrants(Player player, Collection<String> permissionGrants, boolean revokeMissing, String fallbackKey, boolean markConverted) {
+        PlayerColorData before = loadPlayer(player);
+        PlayerColorData data = before.copy();
         if (data.isEzColorsConverted()) {
             return new me.foesio.foColours.compat.EzColorsCompatService.SyncResult(0, 0, data.snapshotLegacyPermissionGrants().size(), true);
         }
@@ -254,19 +281,56 @@ public final class PlayerDataManager {
 
         if (changed) {
             save(player.getUniqueId(), data);
+            cache.put(player.getUniqueId(), data);
+            emitAccessChanges(player.getUniqueId(), before, data, ColourChangeCause.EZCOLORS_SYNC);
+            emitSelection(player.getUniqueId(), before.getSelectedColour(), data.getSelectedColour(), ColourChangeCause.EZCOLORS_SYNC);
         }
 
         return new me.foesio.foColours.compat.EzColorsCompatService.SyncResult(added, removed, normalizedGrants.size(), false);
     }
 
-    public void normalizeOnlineSelections(ColorRegistry registry, String fallbackKey) {
+    public synchronized void normalizeOnlineSelections(ColorRegistry registry, String fallbackKey) {
+        if (registry.getEnabledColours().isEmpty()) {
+            return; // No configured selection can be made safely.
+        }
+        String enabledFallback = registry.getEnabledColour(fallbackKey)
+                .orElseGet(() -> registry.getEnabledColours().getFirst()).getKey();
         for (Map.Entry<UUID, PlayerColorData> entry : cache.entrySet()) {
-            PlayerColorData data = entry.getValue();
+            PlayerColorData before = entry.getValue();
+            PlayerColorData data = before.copy();
             data.ensureUnlocked(configManager.getDefaultUnlockedColours());
             if (!registry.getEnabledColour(data.getSelectedColour()).isPresent() || !data.hasUnlocked(data.getSelectedColour())) {
-                data.setSelectedColour(fallbackKey);
-                data.ensureUnlocked(List.of(fallbackKey));
+                data.setSelectedColour(enabledFallback);
+                data.ensureUnlocked(List.of(enabledFallback));
+            }
+            if (!before.snapshotUnlockedColours().equals(data.snapshotUnlockedColours())
+                    || !before.getSelectedColour().equals(data.getSelectedColour())) {
                 save(entry.getKey(), data);
+                cache.put(entry.getKey(), data);
+                emitAccessChanges(entry.getKey(), before, data, ColourChangeCause.RELOAD);
+                emitSelection(entry.getKey(), before.getSelectedColour(), data.getSelectedColour(), ColourChangeCause.RELOAD);
+            }
+        }
+    }
+
+    private void emitSelection(UUID uuid, String oldKey, String newKey, ColourChangeCause cause) {
+        if (!oldKey.equals(newKey)) {
+            Bukkit.getPluginManager().callEvent(new PlayerColourSelectionChangedEvent(uuid, oldKey, newKey, cause));
+        }
+    }
+
+    private void emitAccess(UUID uuid, String key, boolean unlocked, ColourChangeCause cause) {
+        Bukkit.getPluginManager().callEvent(new PlayerColourAccessChangedEvent(uuid, key, unlocked, cause));
+    }
+
+    private void emitAccessChanges(UUID uuid, PlayerColorData before, PlayerColorData after, ColourChangeCause cause) {
+        Set<String> keys = new LinkedHashSet<>(before.snapshotUnlockedColours());
+        keys.addAll(before.snapshotRevokedColours());
+        keys.addAll(after.snapshotUnlockedColours());
+        keys.addAll(after.snapshotRevokedColours());
+        for (String key : keys) {
+            if (before.hasUnlocked(key) != after.hasUnlocked(key)) {
+                emitAccess(uuid, key, after.hasUnlocked(key), cause);
             }
         }
     }

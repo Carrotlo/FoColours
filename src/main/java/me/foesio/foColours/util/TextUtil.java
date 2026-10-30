@@ -84,7 +84,7 @@ public final class TextUtil {
             return "";
         }
         if (palette.isEmpty()) {
-            return colorize("&f" + input);
+            return input;
         }
 
         StringBuilder builder = new StringBuilder();

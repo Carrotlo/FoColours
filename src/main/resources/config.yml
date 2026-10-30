@@ -3,9 +3,14 @@
 # FoColours configuration
 # Messages, GUI text colours, and text tokens are in messages.yml.
 
+# Version of the installed player menu layout. Updated only after a successful upgrade.
+public-gui-schema-version: 3
+
 features:
   # Enables the player colour selection GUI opened by /focolours.
   player-gui-enabled: true
+  # Allows players to reset their selected colour by command or menu.
+  reset-enabled: true
   # Shows locked colours in the player menu as unavailable options.
   show-locked-colours: true
 

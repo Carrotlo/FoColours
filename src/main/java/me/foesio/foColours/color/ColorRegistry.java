@@ -29,7 +29,6 @@ public final class ColorRegistry {
 
         loadColours("colours.built-in", false, loadedDefinitions, loadedAliases);
         loadColours("colours.custom", true, loadedDefinitions, loadedAliases);
-        ensureEnabledFallback(loadedDefinitions, loadedAliases);
 
         this.definitions = Collections.unmodifiableMap(loadedDefinitions);
         this.aliasLookup = Collections.unmodifiableMap(loadedAliases);
@@ -94,22 +93,33 @@ public final class ColorRegistry {
                 continue;
             }
 
-            ColorType type = parseType(colourSection.getString("type", custom ? "HEX" : "LEGACY"));
+            String colourPath = path + "." + rawKey;
+            Optional<ColorType> parsedType = readType(colourSection, custom);
+            if (parsedType.isEmpty()) {
+                configManager.warnInvalidColour(colourPath + ".type", "expected LEGACY, HEX, or RAINBOW");
+                continue;
+            }
+            ColorType type = parsedType.get();
             boolean enabled = colourSection.getBoolean("enabled", true);
 
             String displayName = colourSection.getString("display-name", humanize(key));
-            String value = switch (type) {
-                case LEGACY -> colourSection.getString("legacy-code", "&f");
-                case HEX -> colourSection.getString("hex", "#ffffff");
-                case RAINBOW -> "";
-            };
+            String value = readColourValue(colourSection, type);
+            if (type == ColorType.HEX && (value == null || !value.matches("#[0-9A-Fa-f]{6}"))
+                    || type == ColorType.LEGACY && (value == null || !value.matches("&[0-9A-Fa-fK-ORk-or]"))) {
+                configManager.warnInvalidColour(colourPath + (type == ColorType.HEX ? ".hex" : ".legacy-code"),
+                        "invalid or missing colour value");
+                continue;
+            }
 
-            Material material = configManager.readMaterial(colourSection.getString("material"), custom ? Material.NAME_TAG : Material.WHITE_DYE);
+            Optional<Material> configuredMaterial = configManager.readOptionalItemMaterial(
+                    colourSection.getString("material"), colourPath + ".material");
+            Material material = configuredMaterial.orElse(custom ? Material.NAME_TAG : Material.WHITE_DYE);
             List<String> aliases = new ArrayList<>(colourSection.getStringList("aliases"));
             aliases.add(key);
             aliases.add(displayName);
 
-            ChatColorDefinition definition = new ChatColorDefinition(key, displayName, aliases, type, value, material, enabled, custom);
+            ChatColorDefinition definition = new ChatColorDefinition(key, displayName, aliases, type, value,
+                    material, configuredMaterial.isPresent(), enabled, custom);
             loadedDefinitions.put(key, definition);
 
             if (enabled) {
@@ -120,46 +130,43 @@ public final class ColorRegistry {
         }
     }
 
-    private void ensureEnabledFallback(Map<String, ChatColorDefinition> loadedDefinitions, Map<String, String> loadedAliases) {
-        boolean hasEnabledColour = loadedDefinitions.values().stream().anyMatch(ChatColorDefinition::isEnabled);
-        if (hasEnabledColour) {
-            return;
+    static Optional<ColorType> readType(ConfigurationSection section, boolean custom) {
+        if (!section.contains("type", false)) {
+            // Both were valid omissions in released FoColours owner data.
+            return Optional.of(custom ? ColorType.HEX : ColorType.LEGACY);
         }
-
-        ChatColorDefinition fallback = new ChatColorDefinition(
-                "light_gray",
-                "Light Gray",
-                List.of("light_gray", "lightgray", "gray", "grey", "default"),
-                ColorType.LEGACY,
-                "&7",
-                Material.LIGHT_GRAY_DYE,
-                true,
-                false
-        );
-        loadedDefinitions.put(fallback.getKey(), fallback);
-        for (String alias : fallback.getAliases()) {
-            loadedAliases.put(normalize(alias), fallback.getKey());
+        String rawType = section.getString("type");
+        if (rawType == null) {
+            return Optional.empty();
         }
-    }
-
-    private ColorType parseType(String rawType) {
         try {
-            return ColorType.valueOf(rawType.toUpperCase(Locale.ROOT));
+            return Optional.of(ColorType.valueOf(rawType.toUpperCase(Locale.ROOT)));
         } catch (IllegalArgumentException ignored) {
-            return ColorType.LEGACY;
+            return Optional.empty();
         }
     }
 
-    private String humanize(String key) {
+    static String readColourValue(ConfigurationSection section, ColorType type) {
+        return switch (type) {
+            // Omitted value fields were valid in the released loader. Explicit
+            // malformed values remain invalid and are rejected by reload().
+            case LEGACY -> section.contains("legacy-code", false)
+                    ? section.getString("legacy-code") : "&f";
+            case HEX -> section.contains("hex", false)
+                    ? section.getString("hex") : "#ffffff";
+            case RAINBOW -> "";
+        };
+    }
+
+    static String humanize(String key) {
         String[] parts = key.split("_");
         List<String> words = new ArrayList<>();
         for (String part : parts) {
-            if (part.isBlank()) {
-                continue;
+            if (!part.isBlank()) {
+                words.add(part.substring(0, 1).toUpperCase(Locale.ROOT) + part.substring(1));
             }
-
-            words.add(part.substring(0, 1).toUpperCase(Locale.ROOT) + part.substring(1));
         }
         return String.join(" ", words);
     }
+
 }

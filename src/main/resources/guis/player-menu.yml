@@ -1,14 +1,51 @@
-# FoColours public player GUI.
-# Slot numbers are 0-based Minecraft inventory slots.
-# Placeholders: {colour} {preview} {status} {current_colour} {default_colour}
-
-gui:
-  shared:
-    filler-material: GRAY_STAINED_GLASS_PANE
-    empty-colour-material: LIGHT_GRAY_STAINED_GLASS_PANE
-    # Dynamic colour entry slots. 0-based inventory slots.
-    # Rows 2-4, columns 2-8. First and last column stay filler panes.
-    colour-slots:
+title: "&8ꜰᴏᴄᴏʟᴏᴜʀꜱ"
+rows: 6
+filler:
+  enabled: true
+  material: "GRAY_STAINED_GLASS_PANE"
+  amount: 1
+  name: " "
+  lore: []
+buttons:
+  reset:
+    slot: 48
+    enabled: true
+    material: "FEATHER"
+    name: ":feather: {theme}&lRESET COLOUR"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to {theme}{default_colour}&f."
+      - "&7&l | &fCurrent: {theme}{current_colour}"
+      - " "
+      - "{good}→ Click to Reset Colour ←"
+    action: "colours.reset"
+  info:
+    slot: 50
+    enabled: true
+    material: "BOOK"
+    name: ":book: {theme}Your Colours"
+    lore:
+      - "{white}Current: {theme}{current_colour}"
+      - "{white}Unlocked colours:"
+      - "{options}"
+    cycle:
+      selected-format: "{white}• {theme}{option}"
+      unselected-format: "{white}• {theme}{option}"
+    states:
+      empty:
+        material: "BOOK"
+        name: ":book: {theme}Your Colours"
+        lore:
+          - "{white}Current: {theme}{current_colour}"
+          - "{white}Unlocked colours:"
+          - "{white}• {theme}{available}"
+        clickable: false
+    action: "colours.info"
+entries:
+  colours:
+    slots:
       - 10
       - 11
       - 12
@@ -30,71 +67,86 @@ gui:
       - 32
       - 33
       - 34
-
-  states:
-    enabled: "{good}Enabled"
-    disabled: "{bad}Disabled"
-    unlocked: "{good}Unlocked"
-    locked: "{bad}Locked"
-    selected: "{theme}•"
-    unselected: "{white}•"
-    yes: "{good}Yes"
-    no: "{bad}No"
-    custom: "{theme}Custom"
-    built-in: "{muted}Built-in"
-
-  player-menu:
-    # Inventory rows. Valid range: 1-6.
-    rows: 6
-    title: "&8ꜰᴏᴄᴏʟᴏᴜʀꜱ"
-    locked-material: BARRIER
-    items:
-      colour-unlocked:
-        amount: 1
-        custom-model-data: null
-        glow: false
-        name: "{theme}&l{colour}"
-        lore:
-          - "&8ʙᴜᴛᴛᴏɴ"
-          - " "
-          - "&eⓘ Information ↓"
-          - "&7&l | &fPreview: {preview}"
-          - "&7&l | &fStatus: {status}"
-          - " "
-          - "{good}→ Click to Use Colour ←"
-      colour-locked:
-        amount: 1
-        custom-model-data: null
-        glow: false
-        name: "{bad}{colour}"
-        lore:
-          - "{white}Preview: {preview}"
-          - "{white}Status: {status}"
-      reset:
-        slot: 48
-        material: FEATHER
-        amount: 1
-        custom-model-data: null
-        glow: false
-        name: ":feather: {theme}&lRESET COLOUR"
-        lore:
-          - "&8ʙᴜᴛᴛᴏɴ"
-          - " "
-          - "&eⓘ Information ↓"
-          - "&7&l | &fReturn to {theme}{default_colour}&f."
-          - "&7&l | &fCurrent: {theme}{current_colour}"
-          - " "
-          - "{good}→ Click to Reset Colour ←"
-      info:
-        slot: 50
-        material: BOOK
-        amount: 1
-        custom-model-data: null
-        glow: false
-        name: ":book: {theme}Your Colours"
-        lore:
-          - "{white}Current: {theme}{current_colour}"
-          - "{white}Unlocked colours:"
-        unlocked-header: "{white} "
-        unlocked-entry: "{white}• {theme}{colour}"
-        empty-unlocked: "{white}• {theme}Light Gray"
+    source-item: {}
+    empty-item:
+      material: "LIGHT_GRAY_STAINED_GLASS_PANE"
+      amount: 1
+      name: " "
+      lore: []
+    actions:
+      left: "colours.select"
+  previous:
+    slots:
+      - 45
+    item:
+      material: "ARROW"
+      name: "{theme}&lPREVIOUS PAGE"
+      lore:
+        - "&8ʙᴜᴛᴛᴏɴ"
+        - " "
+        - "&eⓘ Information ↓"
+        - "&7&l | &fPage: {theme}{page}&f/{theme}{pages}"
+        - " "
+        - "{good}→ Click to Go to Page {target_page} ←"
+    empty-item:
+      material: "GRAY_STAINED_GLASS_PANE"
+      name: " "
+    actions:
+      left: "colours.previous"
+  next:
+    slots:
+      - 53
+    item:
+      material: "ARROW"
+      name: "{theme}&lNEXT PAGE"
+      lore:
+        - "&8ʙᴜᴛᴛᴏɴ"
+        - " "
+        - "&eⓘ Information ↓"
+        - "&7&l | &fPage: {theme}{page}&f/{theme}{pages}"
+        - " "
+        - "{good}→ Click to Go to Page {target_page} ←"
+    empty-item:
+      material: "GRAY_STAINED_GLASS_PANE"
+      name: " "
+    actions:
+      left: "colours.next"
+states:
+  colour-unlocked:
+    material: "WHITE_WOOL"
+    amount: 1
+    name: "{theme}&l{colour}"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPreview: {preview}"
+      - "&7&l | &fStatus: {status}"
+      - " "
+      - "{good}→ Click to Use Colour ←"
+  colour-selected:
+    material: "WHITE_WOOL"
+    amount: 1
+    glow: true
+    name: "{theme}&l{colour}"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPreview: {preview}"
+      - "&7&l | &fStatus: {status}"
+      - " "
+      - "{good}→ Click to Use Colour ←"
+  colour-locked:
+    material: "BARRIER"
+    amount: 1
+    name: "{bad}{colour}"
+    lore:
+      - "{white}Preview: {preview}"
+      - "{white}Status: {status}"
+  status-unlocked:
+    material: "PAPER"
+    name: "{good}Unlocked"
+  status-locked:
+    material: "PAPER"
+    name: "{bad}Locked"

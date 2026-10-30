@@ -100,4 +100,9 @@ public final class PlayerColorData {
     public synchronized Set<String> snapshotRevokedColours() {
         return new LinkedHashSet<>(revokedColours);
     }
+
+    public synchronized PlayerColorData copy() {
+        return new PlayerColorData(lastKnownName, selectedColour, ezColorsConverted,
+                unlockedColours, legacyPermissionGrants, revokedColours);
+    }
 }

@@ -14,7 +14,14 @@ tokens:
   good: "#3ecf8e"
   bad: "#ff5d73"
 
+formats:
+  number-locale: "en-US"
+  available-separator: ", "
+  available-empty: "none"
+  unknown-colour: "Unknown"
+
 messages:
+  gui-unavailable: "{prefix} {bad}The colour menu is unavailable. Ask a server admin to check its configuration."
   no-permission: "{prefix} {bad}You do not have permission {muted}to do that."
   player-only: "{prefix} {bad}Only players {muted}can use this."
   reload-complete: "{prefix} :emerald: {good}Reloaded {theme}FoColours {muted}from config.yml, messages.yml, and guis/."
@@ -26,6 +33,7 @@ messages:
   ezcolors-toggle-status: "{prefix} {muted}EzColors compatibility: {state}"
   select-success: "{prefix} :name_tag: {good}Selected {theme}{colour}{muted} for your chat."
   reset-success: "{prefix} :paper: {good}Reset your chat colour {muted}to {theme}{default_colour}{muted}."
+  reset-disabled: "{prefix} {bad}Reset is disabled {muted}in the config."
   already-selected: "{prefix} {bad}You are already using {theme}{colour}{muted}."
   already-default: "{prefix} {bad}You are already using the default colour."
   not-unlocked: "{prefix} {bad}You do not have {theme}{colour}{muted} unlocked."

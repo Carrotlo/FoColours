@@ -1,245 +1,232 @@
 package me.foesio.foColours.gui;
 
-import me.foesio.core.dialog.DialogIcons;
-import me.foesio.core.gui.GuiButtonConfig;
-import me.foesio.core.gui.GuiItems;
-import me.foesio.core.gui.GuiSlots;
+import me.foesio.core.gui.publicgui.GuiLoadReport;
+import me.foesio.core.gui.publicgui.PublicGuiClick;
+import me.foesio.core.gui.publicgui.PublicGuiContract;
+import me.foesio.core.gui.publicgui.PublicGuiDefinition;
+import me.foesio.core.gui.publicgui.PublicGuiItemRenderer;
+import me.foesio.core.gui.publicgui.PublicGuiRenderInput;
+import me.foesio.core.gui.publicgui.PublicGuiService;
+import me.foesio.core.gui.publicgui.PublicGuiText;
 import me.foesio.foColours.FoColours;
 import me.foesio.foColours.color.ChatColorDefinition;
 import me.foesio.foColours.service.ChatColorService;
-import org.bukkit.Material;
+import me.foesio.foColours.api.ColourChangeCause;
 import org.bukkit.entity.Player;
-import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.inventory.ItemStack;
 
-import java.util.ArrayList;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
-public final class PlayerColorMenu extends BaseMenu {
+/** The single player inventory screen, rendered and dispatched by Core. */
+public final class PlayerColorMenu implements AutoCloseable {
 
-    private static final GuiButtonConfig BUTTONS = GuiButtonConfig.defaults();
-    private static final int RESET_SLOT = 48;
-    private static final int INFO_SLOT = 50;
-
+    public static final String MENU_ID = "colours.player";
+    private final FoColours plugin;
     private final ChatColorService service;
-    private final int page;
+    private final PublicGuiService gui;
+    private final Map<UUID, Integer> openPages = new HashMap<>();
+    private boolean migrationBlocked;
 
     public PlayerColorMenu(FoColours plugin) {
-        this(plugin, 0);
-    }
-
-    @Override
-    protected void openSound(Player player) {
-        plugin.getSounds().play(player, "player.open");
-    }
-
-    private PlayerColorMenu(FoColours plugin, int page) {
-        super(plugin, plugin.getConfigManager().getGuiSize("gui.player-menu.rows", 6), plugin.getConfigManager().title("gui.player-menu.title"));
+        this.plugin = plugin;
         this.service = plugin.getChatColorService();
-        this.page = Math.max(0, page);
+        Path installed = plugin.getDataFolder().toPath().resolve("guis/player-menu.yml");
+        this.gui = new PublicGuiService(plugin)
+                .menu(MENU_ID, installed, contract())
+                .entryPoint("command.focolours", MENU_ID)
+                .action("colours.select", this::select)
+                .action("colours.reset", this::reset)
+                .action("colours.info", click -> { /* Informational item; intentional silence. */ })
+                .action("colours.previous", click -> changePage(click, -1))
+                .action("colours.next", click -> changePage(click, 1))
+                .requireState(MENU_ID, "colour-unlocked")
+                .requireState(MENU_ID, "colour-selected")
+                .requireState(MENU_ID, "colour-locked")
+                .requireState(MENU_ID, "status-unlocked")
+                .requireState(MENU_ID, "status-locked")
+                .requireEntry(MENU_ID, "colours", 0);
+        gui.start();
+        gui.reload();
     }
 
-    @Override
-    protected void draw(Player viewer) {
-        fill(plugin.getConfigManager().getMaterial("gui.shared.filler-material", Material.GRAY_STAINED_GLASS_PANE));
-
-        List<Integer> colourSlots = plugin.getConfigManager().getGuiSlots("gui.shared.colour-slots", inventory.getSize());
-        List<ChatColorDefinition> definitions = visibleColours(viewer);
-        int pageSize = colourSlots.size();
-        int maxPage = maxPage(definitions.size(), pageSize);
-        int activePage = Math.min(page, maxPage);
-        int startIndex = activePage * pageSize;
-
-        for (int index = 0; index < colourSlots.size(); index++) {
-            int definitionIndex = startIndex + index;
-            if (definitionIndex >= definitions.size()) {
-                setEmptyColourSlot(colourSlots.get(index));
-                continue;
-            }
-
-            ChatColorDefinition definition = definitions.get(definitionIndex);
-            boolean unlocked = service.hasUnlocked(viewer, definition.getKey());
-
-            Map<String, String> placeholders = new HashMap<>();
-            placeholders.put("colour", definition.getDisplayName());
-            placeholders.put("preview", definition.getPreviewLabel(plugin.getConfigManager()));
-            placeholders.put("status", unlocked
-                    ? plugin.getConfigManager().messageForViewer(viewer, "gui.states.unlocked", Map.of())
-                    : plugin.getConfigManager().messageForViewer(viewer, "gui.states.locked", Map.of()));
-
-            boolean selected = unlocked && service.isSelected(viewer, definition.getKey());
-            String lorePath = unlocked ? "gui.player-menu.items.colour-unlocked.lore" : "gui.player-menu.items.colour-locked.lore";
-
-            String itemPath = unlocked ? "gui.player-menu.items.colour-unlocked" : "gui.player-menu.items.colour-locked";
-            Material material = unlocked
-                    ? definition.getMaterial()
-                    : plugin.getConfigManager().getMaterial("gui.player-menu.locked-material", Material.BARRIER);
-            setItem(colourSlots.get(index), guiItem(
-                    viewer,
-                    itemPath,
-                    material,
-                    placeholders,
-                    selected
-            ));
-        }
-
-        drawPageButtons(viewer, activePage, maxPage);
-        setItem(resetSlot(inventory.getSize()), guiItem(viewer, "gui.player-menu.items.reset", Material.FEATHER,
-                service.commandContext(viewer), false));
-        setItem(infoSlot(inventory.getSize()), guiItem(viewer, "gui.player-menu.items.info", Material.BOOK,
-                service.commandContext(viewer), false, buildInfoLore(viewer)));
+    public static PublicGuiContract contract() {
+        return new PublicGuiContract(
+                java.util.Set.of("colours.select", "colours.reset", "colours.info", "colours.previous", "colours.next"),
+                Map.of(),
+                java.util.Set.of("colour", "preview", "status", "current_colour", "default_colour", "available",
+                        "page", "pages", "target_page"),
+                PublicGuiContract.InteractionMode.CORE);
     }
 
-    @Override
-    public void handleClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) {
-            return;
-        }
-
-        int slot = event.getRawSlot();
-        int inventorySize = event.getView().getTopInventory().getSize();
-        List<Integer> colourSlots = plugin.getConfigManager().getGuiSlots("gui.shared.colour-slots", inventorySize);
-        List<ChatColorDefinition> definitions = visibleColours(player);
-        int pageSize = colourSlots.size();
-        int maxPage = maxPage(definitions.size(), pageSize);
-        int activePage = Math.min(page, maxPage);
-
-        if (slot == previousPageSlot(inventorySize) && activePage > 0) {
-            plugin.getSounds().play(player, "player.page-previous");
-            new PlayerColorMenu(plugin, activePage - 1).openSilently(player);
-            return;
-        }
-        if (slot == nextPageSlot(inventorySize) && activePage < maxPage) {
-            plugin.getSounds().play(player, "player.page-next");
-            new PlayerColorMenu(plugin, activePage + 1).openSilently(player);
-            return;
-        }
-        if (slot == resetSlot(inventorySize)) {
-            service.resetColour(player);
-            plugin.getSounds().play(player, "player.reset");
-            plugin.getConfigManager().sendMessage(player, "messages.reset-success", service.commandContext(player));
-            new PlayerColorMenu(plugin, activePage).openSilently(player);
-            return;
-        }
-
-        int index = colourSlots.indexOf(slot);
-        int definitionIndex = activePage * pageSize + index;
-        if (index < 0 || definitionIndex >= definitions.size()) {
-            return;
-        }
-
-        ChatColorDefinition definition = definitions.get(definitionIndex);
-        if (!service.hasUnlocked(player, definition.getKey())) {
-            plugin.getSounds().play(player, "player.error");
-            plugin.getConfigManager().sendMessage(player, "messages.not-unlocked",
-                    service.commandContext(player, "colour", definition.getDisplayName()));
-            return;
-        }
-
-        if (service.isSelected(player, definition.getKey())) {
-            plugin.getSounds().play(player, "player.error");
-            plugin.getConfigManager().sendMessage(player, "messages.already-selected",
-                    service.commandContext(player, "colour", definition.getDisplayName()));
-            return;
-        }
-
-        service.selectColour(player, definition.getKey());
-        plugin.getSounds().playWithPitchVariation(player, "player.select", 0.05f);
-        plugin.getConfigManager().sendMessage(player, "messages.select-success",
-                service.commandContext(player, "colour", definition.getDisplayName()));
-        new PlayerColorMenu(plugin, activePage).openSilently(player);
+    public GuiLoadReport reload() {
+        return gui.reload();
     }
 
-    private List<String> buildInfoLore(Player viewer) {
-        List<String> lore = new ArrayList<>(plugin.getConfigManager().messageListForViewer(
-                viewer, "gui.player-menu.items.info.lore", service.commandContext(viewer)));
-        List<ChatColorDefinition> unlocked = service.getUnlockedColours(viewer);
-        if (unlocked.isEmpty()) {
-            lore.add(plugin.getConfigManager().messageForViewer(viewer,
-                    "gui.player-menu.items.info.empty-unlocked", Map.of()));
-            return lore;
+    public GuiLoadReport validateInstalled() {
+        return gui.validateInstalled();
+    }
+
+    public void blockForFailedMigration() {
+        migrationBlocked = true;
+    }
+
+    public void completeMigration() {
+        migrationBlocked = false;
+    }
+
+    public boolean isAvailable() {
+        return !migrationBlocked && gui.snapshot() != null;
+    }
+
+    public void open(Player player) {
+        open(player, 0, true);
+    }
+
+    private void open(Player player, int requestedPage, boolean playSound) {
+        if (!isAvailable()) {
+            plugin.getConfigManager().sendMessage(player, "messages.gui-unavailable");
+            return;
+        }
+        PublicGuiDefinition definition = gui.snapshot().require(MENU_ID);
+        List<Integer> slots = definition.entries().get("colours").slots();
+        List<ChatColorDefinition> colours = visibleColours(player);
+        int pageSize = slots.size();
+        int maxPage = colours.isEmpty() ? 0 : (colours.size() - 1) / pageSize;
+        int page = Math.min(Math.max(requestedPage, 0), maxPage);
+        Map<String, String> placeholders = new HashMap<>(plugin.getMessages().tokenValues());
+        placeholders.putAll(service.commandContext(player));
+        placeholders.put("page", plugin.getConfigManager().formatNumber(page + 1));
+        placeholders.put("pages", plugin.getConfigManager().formatNumber(maxPage + 1));
+
+        Map<Integer, PublicGuiRenderInput.EntryValue> colourEntries = new HashMap<>();
+        for (int index = 0; index < slots.size() && page * pageSize + index < colours.size(); index++) {
+            ChatColorDefinition colour = colours.get(page * pageSize + index);
+            boolean unlocked = service.hasUnlocked(player, colour.getKey());
+            boolean selected = unlocked && service.isSelected(player, colour.getKey());
+            String state = !unlocked ? "colour-locked" : selected ? "colour-selected" : "colour-unlocked";
+            Map<String, String> values = new HashMap<>(plugin.getMessages().tokenValues());
+            values.put("colour", colour.getDisplayName());
+            values.put("preview", colour.getPreviewLabel(plugin.getConfigManager()));
+            values.put("status", plugin.getMessages().renderTemplateForViewer(player,
+                    java.util.Objects.toString(definition.states()
+                            .get(unlocked ? "status-unlocked" : "status-locked").name(), ""), Map.of()));
+            PublicGuiDefinition.FixedItem appearance = appearanceForColour(
+                    definition.states().get(state), colour, unlocked);
+            ItemStack source = PublicGuiItemRenderer.fixed(player, appearance,
+                    values, null, null, "states." + state);
+            colourEntries.put(slots.get(index), new PublicGuiRenderInput.EntryValue(
+                    colour.getKey(), source, Map.of()));
         }
 
-        lore.add(plugin.getConfigManager().messageForViewer(viewer,
-                "gui.player-menu.items.info.unlocked-header", Map.of()));
-        for (ChatColorDefinition definition : unlocked) {
-            lore.add(plugin.getConfigManager().messageForViewer(viewer,
-                    "gui.player-menu.items.info.unlocked-entry", Map.of(
-                    "colour", definition.getDisplayName()
-            )));
+        Map<String, Map<Integer, PublicGuiRenderInput.EntryValue>> entries = new HashMap<>();
+        entries.put("colours", colourEntries);
+        if (page > 0 && definition.entries().containsKey("previous")) {
+            int slot = definition.entries().get("previous").slots().get(0);
+            entries.put("previous", Map.of(slot, new PublicGuiRenderInput.EntryValue(
+                    Integer.toString(page - 1), null, Map.of("target_page", plugin.getConfigManager().formatNumber(page)))));
         }
-        return lore;
-    }
-
-    private int resetSlot(int inventorySize) {
-        return plugin.getConfigManager().getGuiSlot("gui.player-menu.items.reset.slot", RESET_SLOT, inventorySize);
-    }
-
-    private int infoSlot(int inventorySize) {
-        return plugin.getConfigManager().getGuiSlot("gui.player-menu.items.info.slot", INFO_SLOT, inventorySize);
-    }
-
-    private int previousPageSlot(int inventorySize) {
-        return Math.max(0, inventorySize - GuiSlots.ROW_SIZE);
-    }
-
-    private int nextPageSlot(int inventorySize) {
-        return Math.max(0, inventorySize - 1);
+        if (page < maxPage && definition.entries().containsKey("next")) {
+            int slot = definition.entries().get("next").slots().get(0);
+            entries.put("next", Map.of(slot, new PublicGuiRenderInput.EntryValue(
+                    Integer.toString(page + 1), null, Map.of("target_page", plugin.getConfigManager().formatNumber(page + 2)))));
+        }
+        List<String> unlockedNames = service.getUnlockedColours(player).stream()
+                .map(ChatColorDefinition::getDisplayName).toList();
+        boolean infoEnabled = definition.buttons().containsKey("info")
+                && definition.buttons().get("info").enabled();
+        Map<String, String> states = infoEnabled && unlockedNames.isEmpty() ? Map.of("info", "empty") : Map.of();
+        Map<String, PublicGuiText.CycleSelection> cycles = !infoEnabled || unlockedNames.isEmpty() ? Map.of()
+                : Map.of("info", new PublicGuiText.CycleSelection(unlockedNames, -1));
+        gui.openEntryPoint(player, "command.focolours",
+                new PublicGuiRenderInput(placeholders, states, cycles, entries));
+        openPages.put(player.getUniqueId(), page);
+        if (playSound) {
+            plugin.getSounds().play(player, "player.open");
+        }
     }
 
     private List<ChatColorDefinition> visibleColours(Player player) {
         return plugin.getColorRegistry().getEnabledColours().stream()
-                .filter(definition -> plugin.getConfigManager().isShowLockedColours() || service.hasUnlocked(player, definition.getKey()))
-                .toList();
+                .filter(colour -> plugin.getConfigManager().isShowLockedColours()
+                        || service.hasUnlocked(player, colour.getKey())).toList();
     }
 
-    private int maxPage(int totalEntries, int pageSize) {
-        if (pageSize <= 0 || totalEntries <= 0) {
-            return 0;
+    static PublicGuiDefinition.FixedItem appearanceForColour(PublicGuiDefinition.FixedItem configured,
+                                                              ChatColorDefinition colour, boolean unlocked) {
+        if (!unlocked || !colour.hasConfiguredMaterial()) {
+            return configured;
         }
-        return (totalEntries - 1) / pageSize;
+        return new PublicGuiDefinition.FixedItem(colour.getMaterial(), configured.name(),
+                configured.lore(), configured.amount(), configured.customModelData(),
+                configured.glow(), configured.itemFlags());
     }
 
-    private void setEmptyColourSlot(int slot) {
-        setItem(slot, GuiItems.create(
-                plugin.getConfigManager().getMaterial("gui.shared.empty-colour-material", Material.LIGHT_GRAY_STAINED_GLASS_PANE),
-                " ",
-                List.of()
-        ));
+    private void changePage(PublicGuiClick click, int direction) {
+        int page = openPages.getOrDefault(click.player().getUniqueId(), 0);
+        plugin.getSounds().play(click.player(), direction < 0 ? "player.page-previous" : "player.page-next");
+        open(click.player(), page + direction, false);
     }
 
-    private void drawPageButtons(Player viewer, int activePage, int maxPage) {
-        if (activePage > 0) {
-            setItem(previousPageSlot(inventory.getSize()), BUTTONS.previousPage(viewer, activePage - 1, maxPage));
+    private void reset(PublicGuiClick click) {
+        Player player = click.player();
+        if (!plugin.getConfigManager().isResetEnabled()) {
+            plugin.getSounds().play(player, "player.error");
+            plugin.getConfigManager().sendMessage(player, "messages.reset-disabled");
+            return;
         }
-        if (activePage < maxPage) {
-            setItem(nextPageSlot(inventory.getSize()), BUTTONS.nextPage(viewer, activePage + 1, maxPage));
+        if (!service.hasEnabledColours()) {
+            plugin.getSounds().play(player, "player.error");
+            plugin.getConfigManager().sendMessage(player, "messages.gui-unavailable");
+            return;
         }
+        if (service.isDefaultSelected(player)) {
+            plugin.getSounds().play(player, "player.error");
+            plugin.getConfigManager().sendMessage(player, "messages.already-default", service.commandContext(player));
+            return;
+        }
+        service.resetColour(player, ColourChangeCause.PLAYER_MENU);
+        plugin.getSounds().play(player, "player.reset");
+        plugin.getConfigManager().sendMessage(player, "messages.reset-success", service.commandContext(player));
+        open(player, openPages.getOrDefault(player.getUniqueId(), 0), false);
     }
 
-    private org.bukkit.inventory.ItemStack guiItem(Player viewer, String path, Material fallbackMaterial,
-            Map<String, String> placeholders, boolean forceGlow) {
-        return guiItem(viewer, path, fallbackMaterial, placeholders, forceGlow,
-                plugin.getConfigManager().messageListForViewer(viewer, path + ".lore", placeholders));
+    private void select(PublicGuiClick click) {
+        Player player = click.player();
+        ChatColorDefinition colour = plugin.getColorRegistry().getEnabledColour(click.entryId()).orElse(null);
+        if (colour == null || !visibleColours(player).contains(colour)) {
+            return;
+        }
+        if (!service.hasUnlocked(player, colour.getKey())) {
+            plugin.getSounds().play(player, "player.error");
+            plugin.getConfigManager().sendMessage(player, "messages.not-unlocked",
+                    service.commandContext(player, "colour", colour.getDisplayName()));
+            return;
+        }
+        if (service.isSelected(player, colour.getKey())) {
+            plugin.getSounds().play(player, "player.error");
+            plugin.getConfigManager().sendMessage(player, "messages.already-selected",
+                    service.commandContext(player, "colour", colour.getDisplayName()));
+            return;
+        }
+        if (!service.selectColour(player, colour.getKey(), ColourChangeCause.PLAYER_MENU)) {
+            plugin.getSounds().play(player, "player.error");
+            plugin.getConfigManager().sendMessage(player, "messages.not-unlocked",
+                    service.commandContext(player, "colour", colour.getDisplayName()));
+            return;
+        }
+        plugin.getSounds().play(player, "player.select");
+        plugin.getConfigManager().sendMessage(player, "messages.select-success",
+                service.commandContext(player, "colour", colour.getDisplayName()));
+        open(player, openPages.getOrDefault(player.getUniqueId(), 0), false);
     }
 
-    private org.bukkit.inventory.ItemStack guiItem(Player viewer, String path, Material fallbackMaterial,
-            Map<String, String> placeholders, boolean forceGlow, List<String> lore) {
-        int amount = plugin.getConfigManager().getBoundedInt(path + ".amount", 1, 1, 64);
-        boolean glow = forceGlow || plugin.getConfigManager().getBoolean(path + ".glow", false);
-        Material material = plugin.getConfigManager().getMaterial(path + ".material", fallbackMaterial);
-        String name = plugin.getConfigManager().messageForViewer(viewer, path + ".name", placeholders);
-        if ("gui.player-menu.items.colour-unlocked".equals(path)) {
-            name = DialogIcons.withMaterialIcon(name, material);
-        }
-        return GuiItems.create(viewer,
-                material,
-                name,
-                lore,
-                glow,
-                amount,
-                plugin.getConfigManager().getOptionalInt(path + ".custom-model-data")
-        );
+    @Override
+    public void close() {
+        gui.close();
+        openPages.clear();
     }
 }

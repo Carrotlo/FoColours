@@ -1,6 +1,7 @@
 package me.foesio.foColours.service;
 
 import me.foesio.foColours.compat.EzColorsCompatService;
+import me.foesio.foColours.api.ColourChangeCause;
 import me.foesio.foColours.color.ChatColorDefinition;
 import me.foesio.foColours.color.ColorRegistry;
 import me.foesio.foColours.color.ColorType;
@@ -52,49 +53,68 @@ public final class ChatColorService {
     }
 
     public boolean isSelected(Player player, String key) {
-        return resolveSelectedKey(player).equals(key);
+        return hasEnabledColours() && resolveSelectedKey(player).equals(key);
     }
 
     public boolean isDefaultSelected(Player player) {
-        return resolveSelectedKey(player).equals(configManager.getDefaultColourKey());
+        return hasEnabledColours() && resolveSelectedKey(player).equals(getDefaultColour().getKey());
     }
 
     public void selectColour(Player player, String key) {
-        PlayerColorData data = playerDataManager.loadPlayer(player);
-        data.ensureUnlocked(List.of(configManager.getDefaultColourKey()));
+        selectColour(player, key, ColourChangeCause.API);
+    }
+
+    public boolean selectColour(Player player, String key, ColourChangeCause cause) {
+        playerDataManager.loadPlayer(player);
         if (ezColorsCompatService.isEnabled()) {
             ezColorsCompatService.syncPlayer(player, false);
         }
+        PlayerColorData data = playerDataManager.loadPlayer(player);
         if (!data.isRevoked(key) && ezColorsCompatService.hasPermissionAccess(player, key)) {
             playerDataManager.grantColour(player, key);
         }
-        playerDataManager.setSelectedColour(player, key);
+        if (colorRegistry.getEnabledColour(key).isEmpty() || !hasUnlocked(player, key)) {
+            return false;
+        }
+        return playerDataManager.setSelectedColour(player, key, cause);
     }
 
     public void resetColour(Player player) {
-        playerDataManager.loadPlayer(player).ensureUnlocked(configManager.getDefaultUnlockedColours());
+        resetColour(player, ColourChangeCause.API);
+    }
+
+    public boolean resetColour(Player player, ColourChangeCause cause) {
+        playerDataManager.loadPlayer(player);
         if (ezColorsCompatService.isEnabled()) {
             ezColorsCompatService.syncPlayer(player, false);
         }
-        playerDataManager.setSelectedColour(player, configManager.getDefaultColourKey());
+        return playerDataManager.setSelectedColour(player, getDefaultColour().getKey(), cause);
     }
 
     public boolean grantColour(KnownPlayer target, ChatColorDefinition colour) {
-        return playerDataManager.grantColour(target, colour.getKey());
+        return grantColour(target, colour, ColourChangeCause.ADMIN_COMMAND);
+    }
+
+    public boolean grantColour(KnownPlayer target, ChatColorDefinition colour, ColourChangeCause cause) {
+        return playerDataManager.grantColour(target, colour.getKey(), cause);
     }
 
     public boolean takeColour(KnownPlayer target, ChatColorDefinition colour) {
+        return takeColour(target, colour, ColourChangeCause.ADMIN_COMMAND);
+    }
+
+    public boolean takeColour(KnownPlayer target, ChatColorDefinition colour, ColourChangeCause cause) {
         Player onlineTarget = Bukkit.getPlayer(target.uuid());
         boolean hasLivePermissionAccess = onlineTarget != null && ezColorsCompatService.hasPermissionAccess(onlineTarget, colour.getKey());
-        return playerDataManager.takeColour(target, colour.getKey(), configManager.getDefaultColourKey(), hasLivePermissionAccess);
+        return playerDataManager.takeColour(target, colour.getKey(), getDefaultColour().getKey(), hasLivePermissionAccess, cause);
     }
 
     public boolean isRainbowSelected(Player player) {
-        return getActiveColour(player).getType() == ColorType.RAINBOW;
+        return hasEnabledColours() && getActiveColour(player).getType() == ColorType.RAINBOW;
     }
 
     public boolean isCachedRainbowSelected(Player player) {
-        return getCachedActiveColour(player).getType() == ColorType.RAINBOW;
+        return hasEnabledColours() && getCachedActiveColour(player).getType() == ColorType.RAINBOW;
     }
 
     public String colorizeRainbowChatMessage(String rawMessage) {
@@ -102,14 +122,19 @@ public final class ChatColorService {
     }
 
     public String colorizeSelectedChatMessage(Player player, String rawMessage) {
-        return getCachedActiveColour(player).applyToText(TextUtil.stripColour(rawMessage), configManager);
+        return hasEnabledColours()
+                ? getCachedActiveColour(player).applyToText(TextUtil.stripColour(rawMessage), configManager)
+                : rawMessage;
     }
 
     public String getPlaceholderValue(Player player) {
-        return getCachedActiveColour(player).getChatFormatCode(configManager);
+        return hasEnabledColours() ? getCachedActiveColour(player).getChatFormatCode(configManager) : "";
     }
 
     public String getPlaceholderValue(OfflinePlayer player) {
+        if (!hasEnabledColours()) {
+            return "";
+        }
         if (player instanceof Player onlinePlayer) {
             return getPlaceholderValue(onlinePlayer);
         }
@@ -129,34 +154,45 @@ public final class ChatColorService {
     }
 
     public String getDefaultPlaceholderValue() {
-        return getDefaultColour().getChatFormatCode(configManager);
+        return hasEnabledColours() ? getDefaultColour().getChatFormatCode(configManager) : "";
     }
 
     public String getPlaceholderPreview(Player player) {
-        return getCachedActiveColour(player).getPreviewLabel(configManager);
+        return hasEnabledColours() ? getCachedActiveColour(player).getPreviewLabel(configManager)
+                : configManager.messageSetting("formats.unknown-colour");
     }
 
     public String getDefaultPlaceholderPreview() {
-        return getDefaultColour().getPreviewLabel(configManager);
+        return hasEnabledColours() ? getDefaultColour().getPreviewLabel(configManager)
+                : configManager.messageSetting("formats.unknown-colour");
     }
 
     public String getPlaceholderDisplayName(Player player) {
-        return getCachedActiveColour(player).getDisplayName();
+        return hasEnabledColours() ? getCachedActiveColour(player).getDisplayName()
+                : configManager.messageSetting("formats.unknown-colour");
     }
 
     public String getDefaultPlaceholderDisplayName() {
-        return getDefaultColour().getDisplayName();
+        return hasEnabledColours() ? getDefaultColour().getDisplayName()
+                : configManager.messageSetting("formats.unknown-colour");
     }
 
     public Map<String, String> commandContext(Player player, String... extraPairs) {
         Map<String, String> placeholders = basePlaceholders(extraPairs);
-        ChatColorDefinition active = getActiveColour(player);
-        placeholders.put("current_colour", active.getDisplayName());
-        placeholders.put("default_colour", colorRegistry.getEnabledColour(configManager.getDefaultColourKey())
-                .map(ChatColorDefinition::getDisplayName)
-                .orElse("Light Gray"));
-        placeholders.put("available", String.join(", ", getUnlockedColours(player).stream().map(ChatColorDefinition::getKey).toList()));
+        placeholders.put("current_colour", hasEnabledColours() ? getActiveColour(player).getDisplayName()
+                : configManager.messageSetting("formats.unknown-colour"));
+        placeholders.put("default_colour", hasEnabledColours() ? getDefaultColour().getDisplayName()
+                : configManager.messageSetting("formats.unknown-colour"));
+
+        List<String> available = getUnlockedColours(player).stream().map(ChatColorDefinition::getDisplayName).toList();
+        placeholders.put("available", available.isEmpty()
+                ? configManager.messageSetting("formats.available-empty")
+                : String.join(configManager.messageSetting("formats.available-separator"), available));
         return placeholders;
+    }
+
+    public String getResetColourKey() {
+        return getDefaultColour().getKey();
     }
 
     public Map<String, String> basePlaceholders(String... extraPairs) {
@@ -203,5 +239,9 @@ public final class ChatColorService {
 
     private String resolveSelectedKey(Player player) {
         return getActiveColour(player).getKey();
+    }
+
+    public boolean hasEnabledColours() {
+        return !colorRegistry.getEnabledColours().isEmpty();
     }
 }

@@ -1,0 +1,416 @@
+# FoColours configuration
+# Tokens available in messages and GUI text:
+# {prefix} {theme} {muted} {white} {good} {bad}
+# Runtime placeholders used in selected places:
+# {player} {colour} {value} {version} {author} {available} {current_colour} {default_colour}
+
+style:
+  tokens:
+    theme: "#03fc88"
+    muted: "#a7b8b0"
+    white: "#ffffff"
+    good: "#3ecf8e"
+    bad: "#ff5d73"
+
+features:
+  # Colours only the chat message content. Keep this enabled if another plugin
+  # such as LPC controls the overall chat format.
+  chat-hook-enabled: true
+  # Register PlaceholderAPI hooks when PlaceholderAPI is installed.
+  # %focolours_colour% returns the selected colour code for chat formatters.
+  placeholderapi-enabled: true
+  # Enables the player colour selection GUI opened by /focolours.
+  player-gui-enabled: true
+  # Allows /focolours reset and the reset button in the GUI.
+  reset-enabled: true
+  # Shows locked colours in the player menu as unavailable options.
+  show-locked-colours: true
+  # Master toggle for the rainbow preset.
+  rainbow-enabled: true
+
+compatibility:
+  ezcolors:
+    # Enables one-time migration from EzColors permissions into FoColours userdata.
+    enabled: true
+    # Sync EzColors permissions into userdata when a player joins.
+    sync-on-join: true
+    # Delay the permission sync slightly so permissions plugins have time to attach nodes.
+    join-sync-delay-ticks: 20
+    # Sync EzColors permissions into userdata during startup and reload.
+    sync-on-reload: true
+    # If true, grants that came from EzColors permissions are removed again
+    # if the permission is missing on a later sync.
+    revoke-missing-permission-grants: false
+    # If true, ezcolors.showrainbow also unlocks the rainbow preset.
+    showrainbow-unlocks-rainbow: true
+
+player-data:
+  # New players start with only this colour selected and unlocked.
+  default-colour: light_gray
+  default-unlocked-colours:
+    - light_gray
+
+rainbow:
+  # The palette used by the rainbow preset.
+  palette:
+    - "#ff5d73"
+    - "#ffbd2e"
+    - "#f7f779"
+    - "#3ecf8e"
+    - "#4dbdff"
+    - "#d37cff"
+  # If false, spaces do not advance the palette.
+  advance-on-spaces: false
+
+editor:
+  # New custom hex colours added through the editor use this item material.
+  default-custom-material: NAME_TAG
+
+messages:
+  prefix: "{theme}FoColours &8» {muted}"
+  no-permission: "{prefix} {bad}You do not have permission {muted}to do that."
+  player-only: "{prefix} {bad}Only players {muted}can use this."
+  reload-complete: "{prefix} {good}Reloaded {theme}FoColours {muted}from config.yml."
+  ezcolors-disabled: "{prefix} {bad}EzColors compatibility is disabled {muted}in config.yml."
+  ezcolors-toggle-usage: "{prefix} {muted}Usage: {theme}/focoloursadmin convertezcolors <enable|disable|status>{muted}."
+  ezcolors-toggle-enabled: "{prefix} {good}Enabled {theme}EzColors compatibility {muted}and synced {theme}{count} {muted}online players."
+  ezcolors-toggle-disabled: "{prefix} {bad}Disabled {theme}EzColors compatibility{muted}."
+  ezcolors-toggle-status: "{prefix} {muted}EzColors compatibility: {state}"
+  reset-disabled: "{prefix} {bad}Reset is disabled {muted}in the config."
+  select-success: "{prefix} {good}Selected {theme}{colour}{muted} for your chat."
+  reset-success: "{prefix} {good}Reset your chat colour {muted}to {theme}{default_colour}{muted}."
+  already-selected: "{prefix} {bad}You are already using {theme}{colour}{muted}."
+  already-default: "{prefix} {bad}You are already using the default colour."
+  not-unlocked: "{prefix} {bad}You do not have {theme}{colour}{muted} unlocked."
+  already-unlocked: "{prefix} {bad}{player} already has {theme}{colour}{muted} unlocked."
+  unknown-colour: "{prefix} {bad}Unknown colour {theme}{colour}{muted}."
+  unknown-player: "{prefix} {bad}Could not find player {theme}{player}{muted}."
+  admin-give-success: "{prefix} {good}Gave {theme}{colour}{muted} to {theme}{player}{muted}."
+  admin-take-success: "{prefix} {good}Took {theme}{colour}{muted} from {theme}{player}{muted}."
+  cannot-take-default: "{prefix} {bad}You cannot take the default colour from players."
+  custom-colour-added: "{prefix} {good}Added custom colour {theme}{colour} {muted}({value}{muted})."
+  custom-colour-removed: "{prefix} {good}Removed custom colour {theme}{colour}{muted}."
+  custom-colour-item-updated: "{prefix} {good}Updated {theme}{colour}{muted} to use item {theme}{item}{muted}."
+  custom-colour-renamed: "{prefix} {good}Renamed the custom colour to {theme}{colour}{muted}."
+  cannot-remove-default-custom: "{prefix} {bad}Change the default colour before removing that custom colour."
+  cannot-disable-default: "{prefix} {bad}You cannot disable the current default colour."
+  colour-must-be-enabled-first: "{prefix} {bad}Enable that colour before setting it as default."
+  default-colour-set: "{prefix} {good}Set the default colour to {theme}{colour}{muted}."
+  editor-saved: "{prefix} {good}Saved your editor change."
+  version: "{prefix} {theme}FoColours {muted}v{version} {muted}by {theme}{author}{muted}."
+  admin-usage-give: "{prefix} {muted}Usage: {theme}/focoloursadmin give <player> <colour>"
+  admin-usage-take: "{prefix} {muted}Usage: {theme}/focoloursadmin take <player> <colour>"
+  prompt-invalid: "{prefix} {bad}That input was not valid. {muted}Try again or type {theme}cancel{muted}."
+  prompt-cancelled: "{prefix} {bad}Editor prompt cancelled."
+  player-help:
+    - "{prefix} {muted}Use {theme}/focolours {muted}to open the colour menu."
+    - "{prefix} {muted}Use {theme}/focolours <colour> {muted}to select directly."
+    - "{prefix} {muted}Use {theme}/focolours reset {muted}to return to {theme}{default_colour}{muted}."
+    - "{prefix} {muted}Unlocked colours: {theme}{available}"
+  admin-help:
+    - "{prefix} {muted}Use {theme}/focoloursadmin version {muted}to view plugin info."
+    - "{prefix} {muted}Use {theme}/focoloursadmin reload {muted}to reload config.yml."
+    - "{prefix} {muted}Use {theme}/focoloursadmin editor {muted}to open the config editor."
+    - "{prefix} {muted}Use {theme}/focoloursadmin give <player> <colour> {muted}to unlock a colour."
+    - "{prefix} {muted}Use {theme}/focoloursadmin take <player> <colour> {muted}to remove a colour."
+    - "{prefix} {muted}Use {theme}/focoloursadmin convertezcolors <enable|disable|status> {muted}to control EzColors permission syncing."
+  prompts:
+    edit-prefix:
+      - "{prefix} {muted}Type the new prefix value in chat."
+      - "{prefix} {muted}You can use colour codes and the normal FoColours message tokens."
+      - "{prefix} {muted}Type {theme}cancel {muted}to stop."
+    edit-player-title:
+      - "{prefix} {muted}Type the new player GUI title in chat."
+      - "{prefix} {muted}Keep it short enough for a menu title."
+      - "{prefix} {muted}Type {theme}cancel {muted}to stop."
+    edit-admin-title:
+      - "{prefix} {muted}Type the new admin GUI title in chat."
+      - "{prefix} {muted}Keep it short enough for a menu title."
+      - "{prefix} {muted}Type {theme}cancel {muted}to stop."
+    add-custom-colour:
+      - "{prefix} {muted}Type: {theme}<key> <#RRGGBB> [Display Name]"
+      - "{prefix} {muted}Example: {theme}sunset #ff8844 Sunset"
+      - "{prefix} {muted}Type {theme}cancel {muted}to stop."
+    rename-custom-colour:
+      - "{prefix} {muted}Type the new display name for {theme}{colour}{muted}."
+      - "{prefix} {muted}Type {theme}cancel {muted}to stop."
+
+gui:
+  shared:
+    filler-material: GRAY_STAINED_GLASS_PANE
+    colour-slots:
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 19
+      - 20
+      - 21
+      - 22
+      - 23
+      - 24
+      - 25
+      - 28
+      - 29
+      - 30
+      - 31
+      - 32
+      - 33
+      - 34
+      - 37
+      - 38
+      - 39
+      - 40
+      - 41
+      - 42
+      - 43
+    close:
+      name: "{bad}Close"
+      lore:
+        - "{white}Close this menu."
+    back:
+      name: "{theme}Back"
+      lore:
+        - "{white}Return to the previous menu."
+
+  states:
+    enabled: "{good}Enabled"
+    disabled: "{bad}Disabled"
+    unlocked: "{good}Unlocked"
+    locked: "{bad}Locked"
+    yes: "{good}Yes"
+    no: "{bad}No"
+    custom: "{theme}Custom"
+    built-in: "{muted}Built-in"
+
+  player-menu:
+    title: "&8FoColours"
+    locked-material: BARRIER
+    items:
+      colour-unlocked:
+        name: "{theme}{colour}"
+        lore:
+          - "{white}Preview: {preview}"
+          - "{white}Status: {status}"
+          - "{white}Left-click to use this colour."
+      colour-locked:
+        name: "{bad}{colour}"
+        lore:
+          - "{white}Preview: {preview}"
+          - "{white}Status: {status}"
+      reset:
+        name: "{theme}Reset Colour"
+        lore:
+          - "{white}Return to {theme}{default_colour}{white}."
+          - "{white}Current: {theme}{current_colour}"
+      info:
+        name: "{theme}Your Colours"
+        lore:
+          - "{white}Current: {theme}{current_colour}"
+          - "{white}Unlocked colours:"
+        unlocked-header: "{white} "
+        unlocked-entry: "{white}• {theme}{colour}"
+        empty-unlocked: "{white}• {theme}Light Gray"
+
+  admin-menu:
+    title: "&8FoColours Editor"
+    items:
+      chat-hook:
+        name: "{theme}Chat Hook"
+        lore:
+          - "{white}Toggle colouring the player message content."
+          - "{white}State: {state}"
+      placeholderapi:
+        name: "{theme}PlaceholderAPI Hook"
+        lore:
+          - "{white}Toggle FoColours PlaceholderAPI hooks."
+          - "{white}State: {state}"
+      reset:
+        name: "{theme}Reset Button"
+        lore:
+          - "{white}Toggle player reset access."
+          - "{white}State: {state}"
+      show-locked:
+        name: "{theme}Show Locked Colours"
+        lore:
+          - "{white}Toggle locked colours in the player GUI."
+          - "{white}State: {state}"
+      rainbow:
+        name: "{theme}Rainbow Preset"
+        lore:
+          - "{white}Toggle the rainbow preset."
+          - "{white}State: {state}"
+      edit-prefix:
+        name: "{theme}Edit Prefix"
+        lore:
+          - "{white}Click to edit the plugin prefix"
+          - "{white}through a chat prompt."
+      edit-player-title:
+        name: "{theme}Edit Player GUI Title"
+        lore:
+          - "{white}Click to change the player menu title."
+      edit-admin-title:
+        name: "{theme}Edit Admin GUI Title"
+        lore:
+          - "{white}Click to change the admin menu title."
+      manage-colours:
+        name: "{theme}Manage Colours"
+        lore:
+          - "{white}Toggle colours, set the default,"
+          - "{white}or remove custom colours."
+      add-custom:
+        name: "{theme}Add Custom Hex Colour"
+        lore:
+          - "{white}Click to add a new custom colour"
+          - "{white}with a key and hex value."
+      reload:
+        name: "{theme}Reload Plugin"
+        lore:
+          - "{white}Reload config.yml and refresh runtime data."
+
+  colour-config-menu:
+    title: "&8Colour Manager"
+    items:
+      colour:
+        name: "{theme}{colour}"
+        lore:
+          - "{white}Preview: {preview}"
+          - "{white}Type: {custom_state}"
+          - "{white}Enabled: {status}"
+          - "{white}Default: {default_state}"
+          - "{white}Left-click: toggle enabled"
+          - "{white}Shift-left: set as default"
+          - "{white}Right-click: remove custom colour"
+          - "{white}Shift-right: rename custom colour"
+          - "{white}Place an item on a custom colour to change its icon"
+      info:
+        name: "{theme}Colour Controls"
+        lore:
+          - "{white}Left-click toggles a colour."
+          - "{white}Shift-left sets the default."
+          - "{white}Right-click removes custom colours."
+
+colours:
+  built-in:
+    light_gray:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&7"
+      display-name: "Light Gray"
+      material: LIGHT_GRAY_DYE
+      aliases: [lightgray, gray, grey, default]
+    black:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&0"
+      display-name: "Black"
+      material: INK_SAC
+      aliases: []
+    dark_blue:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&1"
+      display-name: "Dark Blue"
+      material: BLUE_DYE
+      aliases: []
+    dark_green:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&2"
+      display-name: "Dark Green"
+      material: GREEN_DYE
+      aliases: []
+    dark_aqua:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&3"
+      display-name: "Dark Aqua"
+      material: CYAN_DYE
+      aliases: []
+    dark_red:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&4"
+      display-name: "Dark Red"
+      material: RED_DYE
+      aliases: []
+    dark_purple:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&5"
+      display-name: "Dark Purple"
+      material: PURPLE_DYE
+      aliases: []
+    gold:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&6"
+      display-name: "Gold"
+      material: ORANGE_DYE
+      aliases: []
+    dark_gray:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&8"
+      display-name: "Dark Gray"
+      material: GRAY_DYE
+      aliases: [darkgrey]
+    blue:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&9"
+      display-name: "Blue"
+      material: LAPIS_LAZULI
+      aliases: []
+    green:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&a"
+      display-name: "Green"
+      material: LIME_DYE
+      aliases: []
+    aqua:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&b"
+      display-name: "Aqua"
+      material: LIGHT_BLUE_DYE
+      aliases: []
+    red:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&c"
+      display-name: "Red"
+      material: RED_TULIP
+      aliases: []
+    light_purple:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&d"
+      display-name: "Light Purple"
+      material: PINK_DYE
+      aliases: [pink]
+    yellow:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&e"
+      display-name: "Yellow"
+      material: YELLOW_DYE
+      aliases: []
+    white:
+      enabled: true
+      type: LEGACY
+      legacy-code: "&f"
+      display-name: "White"
+      material: WHITE_DYE
+      aliases: []
+    rainbow:
+      enabled: true
+      type: RAINBOW
+      display-name: "Rainbow"
+      material: FIREWORK_STAR
+      aliases: []
+  custom: {}

@@ -13,6 +13,7 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.Collections;
+import java.util.Map;
 
 public abstract class BaseMenu implements InventoryHolder {
 
@@ -63,6 +64,22 @@ public abstract class BaseMenu implements InventoryHolder {
 
     protected void fill(Material material) {
         ItemStack filler = GuiItems.create(material, " ", Collections.emptyList());
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            inventory.setItem(slot, filler);
+        }
+    }
+
+    protected void fill(Player viewer, String path, Material fallbackMaterial) {
+        Material material = plugin.getConfigManager().getMaterial(path + ".material", fallbackMaterial);
+        ItemStack filler = GuiItems.create(
+                viewer,
+                material,
+                plugin.getConfigManager().messageForViewer(viewer, path + ".name", Map.of()),
+                plugin.getConfigManager().messageListForViewer(viewer, path + ".lore", Map.of()),
+                plugin.getConfigManager().getBoolean(path + ".glow", false),
+                plugin.getConfigManager().getBoundedInt(path + ".amount", 1, 1, 64),
+                plugin.getConfigManager().getOptionalInt(path + ".custom-model-data")
+        );
         for (int slot = 0; slot < inventory.getSize(); slot++) {
             inventory.setItem(slot, filler);
         }
