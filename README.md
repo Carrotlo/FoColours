@@ -80,6 +80,119 @@ Main config areas: `features`, `chat`, `native-dialogs`, `compatibility`, `playe
 <details>
 <summary><strong>Developer API</strong></summary>
 
-See [public API source](src/main/java/me/foesio/foColours/api) for the Java service, action results, and Bukkit events.
+FoColours 1.8 exposes `me.foesio.foColours.api.FoColoursApi` through Bukkit's
+`ServicesManager`. The service is registered after FoColours loads its colours and
+player data, and is unregistered on disable. Obtain it when your plugin enables;
+reacquire it after a plugin disable/enable cycle. Keep FoColours class references
+in a separate integration class if FoColours is optional.
+
+Build against the FoColours jar as a **provided** dependency; do not shade it.
+The `me.foesio:FoColours:1.8` coordinates are from this project's `pom.xml`, not
+a promise of a public Maven repository. Build and install the matching provider
+locally, or use its jar in your own build setup.
+
+```xml
+<dependency>
+  <groupId>me.foesio</groupId>
+  <artifactId>FoColours</artifactId>
+  <version>1.8</version>
+  <scope>provided</scope>
+</dependency>
+```
+
+For a `plugin.yml` consumer, use `softdepend: [FoColours]` when integration is
+optional, or `depend: [FoColours]` when required. An optional consumer should
+check for FoColours before loading the class that imports `FoColoursApi`.
+
+```java
+RegisteredServiceProvider<FoColoursApi> registration =
+        Bukkit.getServicesManager().getRegistration(FoColoursApi.class);
+if (registration != null) {
+    FoColoursApi colours = registration.getProvider();
+    String key = colours.playerColours(player).effectiveKey();
+    ColourChangeResult result = colours.grantColour(player, "sunset");
+}
+```
+
+### Queries and actions
+
+- `enabledColours()` and `findEnabledColour(keyOrAlias)` return immutable
+  definition snapshots. A removed, disabled, or unknown colour is absent.
+- `playerColours(player)` returns the stored choice, the effective enabled key,
+  and currently usable enabled keys for an **online** player. `effectiveKey()`
+  is empty when no colours are enabled. Live EzColors permissions may affect
+  access, so stored choice and effective colour can differ.
+- `grantColour` and `takeColour` accept an `OfflinePlayer`. Grants are durable;
+  taking a colour also revokes permission-derived access currently visible to
+  FoColours. The configured default colour cannot be taken.
+- `selectColour` and `resetColour` accept an online `Player`. Selection requires
+  an enabled, unlocked colour. Reset honours `features.reset-enabled`.
+- `renderText(player, text)` applies the player's effective colour, including
+  rainbow, regardless of `chat.mode`. It strips existing colour codes first,
+  matching FoColours chat formatting. With no enabled colours it returns the
+  input unchanged.
+
+Actions send no messages or sounds and do not check the **calling plugin's**
+permissions. They return `ColourChangeResult`; a repeated action is `NO_CHANGE`.
+Storage failure throws `IllegalStateException`, so it never reports success.
+Calls on a disabled service throw `IllegalStateException`.
+
+Call methods that touch a player from that player's owning server context.
+Do not call them from an asynchronous chat callback. On regionized servers,
+schedule with the target player's scheduler. Offline writes also require an
+appropriate server scheduler context. The service does not block or hop threads.
+
+### Events
+
+`PlayerColourSelectionChangedEvent` carries UUID, old and new **stored** keys,
+and `ColourChangeCause`. It fires after a changed selection is saved, including
+selection, reset, revocation fallback, EzColors fallback, and reload fallback.
+
+`PlayerColourAccessChangedEvent` carries UUID, colour key, new stored access
+state (`isUnlocked()`), and cause. It fires after a stored grant, revocation, or
+sync change is saved. It does not report every live permission change. Startup
+data recovery, unchanged actions, and failed saves fire neither event.
+
+Events are observational and cannot be cancelled. They run on the context that
+performed the mutation; `isAsynchronous()` reflects dispatch context. A UUID
+may belong to an offline player. Listeners must schedule Bukkit player/world
+work onto the relevant owning context. Event payloads contain immutable values
+and no internal data objects. The access event fires before the selection event
+when one operation both revokes access and resets the selection.
+
+### Event listener example
+
+Inside a Bukkit `Listener` registered by your plugin (import this event class, `org.bukkit.event.EventHandler`, and `org.bukkit.Bukkit` where used):
+
+```java
+@EventHandler
+public void onPlayerColourSelectionChanged(PlayerColourSelectionChangedEvent event) {
+    Bukkit.getLogger().info("Selected colour: " + event.getNewKey());
+}
+```
+
+### Complete public API method index
+
+Signatures use short type names; import Fo types from this plugin's `api` package and Bukkit types from Bukkit.
+
+#### `FoColoursApi`
+
+```java
+List<ColourSnapshot> enabledColours();
+Optional<ColourSnapshot> findEnabledColour(String);
+PlayerColourSnapshot playerColours(Player);
+ColourChangeResult grantColour(OfflinePlayer, String);
+ColourChangeResult takeColour(OfflinePlayer, String);
+ColourChangeResult selectColour(Player, String);
+ColourChangeResult resetColour(Player);
+String renderText(Player, String);
+```
+
+**Other public contract types:** `ColourChangeCause`, `ColourChangeResult`, `ColourSnapshot`, `ColourType`, `PlayerColourSnapshot`.
+
+### Complete Bukkit event index
+
+- `PlayerColourAccessChangedEvent`.
+- `PlayerColourSelectionChangedEvent`.
 
 </details>
